@@ -20,7 +20,7 @@ def generate_combos(
     main_count: int,
     max_number: int,
     min_number: int = 1,
-    tickets: int = 5,
+    tickets: int = 1,
     mode: str = "hot",
     recent_draws: int | None = None,
     recent_years: int | None = None,

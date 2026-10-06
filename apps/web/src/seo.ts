@@ -13,7 +13,7 @@ export const PAGE_LEAD: Record<string, string> = {
   history: "過去の当せん番号と当せん金額を、新しい順に表示します。",
   search: "指定した数字が本数字またはボーナスに出た回を表示します。",
   trends: "数字ごとの出現回数と、最後に出た回を表示します。",
-  generate: "過去の出現回数をもとに、指定した口数の組み合わせを作成します。",
+  generate: "出現回数をもとに組み合わせを作成します。",
   about: "ロト6・ロト7・ミニロトの当せん番号を調べ、組み合わせを作成できるサイトです。",
   disclaimer: "掲載内容は参考情報です。正式な結果は公式の案内で確認してください。",
   privacy: "会員登録は不要です。お問い合わせでいただいた情報は、返信に限り使用します。",
@@ -27,9 +27,14 @@ const META_DESC: Record<string, string> = {
   flash: "抽せん回ごとの当せん番号と当せん金額。",
   history: "過去の当せん番号と当せん金額を新しい順に表示します。",
   search: "指定した数字が出た回を表示します。",
+  combo: "本数字1口の形と出現を、過去の開催と照らします。",
   freq: "数字ごとの出現回数と、最後に出た回。",
+  pairs: "2個・3個の同時出現。",
+  shape: "奇数偶数、合計、連番。",
+  grid: "直近の出目表。",
+  follow: "直前の開催との重なりと、次に出た数字。",
   ranks: "1等から3等までの当せん金額の上位・下位。",
-  generate: "過去の出現回数をもとに、指定口数の組み合わせを作成します。",
+  generate: "出現回数をもとに組み合わせを作成します。",
   about: "ロト6・ロト7・ミニロトの当せん番号を調べ、組み合わせを作成できるサイトです。",
   disclaimer: "掲載内容は参考情報です。正式な結果は公式の案内で確認してください。",
   privacy: "会員登録は不要です。お問い合わせでいただいた情報は返信に限り使用します。",
@@ -43,7 +48,8 @@ export function setSeo(path: string) {
   let description = META_DESC.home;
 
   if (parts.length === 0) {
-    title = `${SITE}｜ロト6・ロト7・ミニロト 過去当せん番号検索`;
+    title = SITE;
+    description = META_DESC.home;
   } else if (parts[0] === "about") {
     title = `このサイトについて｜${SITE}`;
     description = META_DESC.about;
@@ -67,31 +73,50 @@ export function setSeo(path: string) {
       title = `${label}｜${SITE}`;
       description = `${label}の最新結果、速報、結果一覧、出現回数、金額ランキング。`;
     } else if (view === "latest") {
-      title = `${label} 最新結果｜${SITE}`;
+      title = `${label} 当選番号（最新結果）｜${SITE}`;
       description = `${label}。${META_DESC.latest}`;
     } else if (view === "flash") {
       const drawNo = parts[2];
       if (drawNo) {
-        title = `${label} 第${String(drawNo).padStart(4, "0")}回 速報｜${SITE}`;
+        title = `${label} 第${String(drawNo).padStart(4, "0")}回 当選番号｜${SITE}`;
         description = `${label}第${String(drawNo).padStart(4, "0")}回の当せん番号と当せん金額。`;
       } else {
         title = `${label} 速報｜${SITE}`;
         description = `${label}。${META_DESC.flash}`;
       }
     } else if (view === "generate") {
-      title = `${label} 出目生成｜${SITE}`;
-      description = `${label}。${META_DESC.generate}`;
+      title = `${label} 予想｜${SITE}`;
+      description = `${label} 予想。${META_DESC.generate}`;
     } else if (view === "search") {
       title = `${label} 数字検索｜${SITE}`;
       description = `${label}。${META_DESC.search}`;
+    } else if (view === "combo") {
+      title = `${label} 組合診断｜${SITE}`;
+      description = `${label}。${META_DESC.combo}`;
     } else if (view === "freq" || view === "trends") {
-      title = `${label} 出現回数｜${SITE}`;
+      title = `${label} よく出る数字・出現回数｜${SITE}`;
       description = `${label}。${META_DESC.freq}`;
+    } else if (view === "pairs") {
+      title = `${label} よく出る組み合わせ｜${SITE}`;
+      description = `${label}。${META_DESC.pairs}`;
+    } else if (view === "shape") {
+      title = `${label} 奇数偶数・合計｜${SITE}`;
+      description = `${label}。${META_DESC.shape}`;
+    } else if (view === "grid") {
+      title = `${label} 出目表｜${SITE}`;
+      description = `${label}。${META_DESC.grid}`;
+    } else if (view === "follow") {
+      title = `${label} 前回との重なり｜${SITE}`;
+      description = `${label}。${META_DESC.follow}`;
+    } else if (view === "n") {
+      const nn = parts[2] ? String(Number(parts[2])).padStart(2, "0") : "";
+      title = `${label} ${nn} の出現回数・相性｜${SITE}`;
+      description = `${label} ${nn} の出現回数と一緒に出た数字。`;
     } else if (view === "ranks") {
-      title = `${label} 金額ランキング｜${SITE}`;
+      title = `${label} 当せん金額ランキング｜${SITE}`;
       description = `${label}。${META_DESC.ranks}`;
     } else if (view === "history") {
-      title = `${label} 結果一覧｜${SITE}`;
+      title = `${label} 当選番号一覧（過去結果）｜${SITE}`;
       description = `${label}。${META_DESC.history}`;
     } else {
       title = `${label}｜${SITE}`;
@@ -102,6 +127,14 @@ export function setSeo(path: string) {
   document.title = title;
   const meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute("content", description);
+  const clean = path.split("?")[0] || "/";
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement("link");
+    canonical.setAttribute("rel", "canonical");
+    document.head.appendChild(canonical);
+  }
+  canonical.setAttribute("href", clean);
 }
 
 export function gameLabel(id: string): string {

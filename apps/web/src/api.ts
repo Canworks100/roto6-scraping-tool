@@ -70,6 +70,50 @@ export function search(game: string, numbers: number[], limit = 40, offset = 0) 
   }>(`/api/${game}/search?${qs}&limit=${limit}&offset=${offset}`);
 }
 
+export type ComboPayload = {
+  game?: string;
+  period: string;
+  numbers: number[];
+  draw_count: number;
+  prizes: { grade: number; ways: number; total: number; one_in: number | null }[];
+  match_hist: { match_count: number; draws: number }[];
+  exact_count: number;
+  exact: { draw_no: number; draw_date: string; match_count: number }[];
+  samples: { draw_no: number; draw_date: string; match_count: number; numbers: number[] }[];
+  numbers_stats: {
+    number: number;
+    count: number;
+    expected: number;
+    vs_expected: number;
+    last_draw_no: number | null;
+    last_draw_date: string | null;
+  }[];
+  shape: {
+    even_count: number;
+    odd_count: number;
+    same_odd_even_draws: number;
+    sum: number;
+    sum_bin: string;
+    same_sum_bin_draws: number;
+    adjacent_count: number;
+    longest_run: number;
+    same_adjacent_draws: number;
+    bands: { label: string; count: number }[];
+    mean_sum?: number;
+  };
+  diagnosis?: {
+    verdict: string;
+    score: number;
+    summary: string;
+    points: { label: string; tone: string; text: string }[];
+  };
+};
+
+export function combo(game: string, numbers: number[], period = "all") {
+  const qs = numbers.map((n) => `n=${n}`).join("&");
+  return getJson<ComboPayload>(`/api/${game}/combo?${qs}&period=${encodeURIComponent(period)}`);
+}
+
 export type PrizeRankItem = {
   amount: number;
   count: number | null;
@@ -87,24 +131,92 @@ export type PrizeRankGroup = {
   draws: PrizeRankItem[];
 };
 
-export function trends(game: string, years = 10) {
+export type FreqRow = {
+  number: number;
+  count: number;
+  rank: number;
+  probability: number;
+  last_draw_no?: number | null;
+  last_draw_date?: string | null;
+  draws_since_last?: number;
+  bonus_count?: number;
+  main_plus_bonus?: number;
+  expected_main?: number;
+  expected_bonus?: number;
+  max_rest?: number;
+  max_streak?: number;
+  bonus_draws_since_last?: number;
+  bonus_last_draw_date?: string | null;
+  bonus_max_rest?: number;
+  bonus_max_streak?: number;
+};
+
+export type PairRow = {
+  number_a: number;
+  number_b: number;
+  number_c?: number;
+  count: number;
+  probability: number;
+  expected?: number;
+};
+
+export type TrendsPayload = {
+  game: string;
+  period?: string;
+  period_label?: string;
+  meta: {
+    draw_count?: number;
+    start_draw?: number;
+    end_draw?: number;
+    start_date?: string;
+    end_date?: string;
+    years?: number;
+    game_draw_count?: number;
+  };
+  frequency: FreqRow[];
+  pairs?: PairRow[];
+  pairs_high?: PairRow[];
+  pairs_low?: PairRow[];
+  triples?: PairRow[];
+  triples_high?: PairRow[];
+  triples_low?: PairRow[];
+  shape?: {
+    odd_even: { even_count: number; odd_count: number; draws: number; rate: number }[];
+    sum_summary: { mean: number; median: number; min: number; max: number; mode: number };
+    sum_bins: { label: string; draws: number }[];
+    consecutive_pairs: { adjacent_count: number; draws: number; rate: number }[];
+    consecutive_run: { run_length: number; draws: number; rate: number }[];
+    last_digit: { digit: number; count: number; expected: number }[];
+    span: { summary: { mean: number; min: number; max: number }; items: { span: number; draws: number }[] };
+    bands: { id: string; label: string; min: number; max: number; count: number }[];
+    band_mix: Record<string, number>;
+    weekday: { weekday: number; draws: number }[];
+  };
+  follow?: {
+    overlap: { match_count: number; draws: number; rate: number }[];
+    next_top: { number: number; sample: number; next: { number: number; count: number }[] }[];
+  };
+  summary_text?: string;
+  error?: string;
+  latest?: DrawItem | null;
+  prize_ranks?: Record<string, { high: PrizeRankGroup[]; low: PrizeRankGroup[] }>;
+};
+
+export function trends(game: string, period = "all") {
+  return getJson<TrendsPayload>(`/api/${game}/trends?period=${encodeURIComponent(period)}`);
+}
+
+export function numberDetail(game: string, n: number, period = "all") {
   return getJson<{
     game: string;
-    meta: Record<string, unknown>;
-    frequency: {
-      number: number;
-      count: number;
-      rank: number;
-      probability: number;
-      last_draw_no?: number | null;
-      last_draw_date?: string | null;
-      draws_since_last?: number;
-    }[];
-    summary_text?: string;
-    error?: string;
-    latest?: DrawItem | null;
-    prize_ranks?: Record<string, { high: PrizeRankGroup[]; low: PrizeRankGroup[] }>;
-  }>(`/api/${game}/trends?years=${years}`);
+    period: string;
+    number: number;
+    frequency: FreqRow;
+    mates: { number: number; count: number; probability: number }[];
+    total: number;
+    items: DrawItem[];
+    meta?: TrendsPayload["meta"];
+  }>(`/api/${game}/numbers/${n}?period=${encodeURIComponent(period)}`);
 }
 
 export function latest(game: string) {
@@ -146,6 +258,21 @@ export function article(game: string, drawNo: number) {
   return getJson<FlashArticle>(`/api/${game}/articles/${drawNo}`);
 }
 
+export type WeekPick = {
+  game: string;
+  label: string;
+  latest: DrawItem;
+  next_draw_no: number;
+  next: number[];
+  previous: number[];
+  matched: number[];
+  match_count: number;
+};
+
+export function weekPick(game: string) {
+  return getJson<WeekPick>(`/api/${game}/week-pick`);
+}
+
 export function generate(
   game: string,
   body: {
@@ -153,6 +280,7 @@ export function generate(
     mode: "hot" | "balanced";
     recent_draws?: number | null;
     recent_years?: number | null;
+    seed?: number | null;
   },
 ) {
   return getJson<{

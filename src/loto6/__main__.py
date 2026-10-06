@@ -134,11 +134,14 @@ def main(argv: list[str] | None = None) -> int:
 
     g = get_game(config, args.game)
     config = dict(config)
+    config["_game"] = args.game
     config["lottery"] = {
         **dict(config.get("lottery") or {}),
         "max_number": int(g["max_number"]),
         "main_count": int(g["main_count"]),
         "min_number": int(g["min_number"]),
+        "bonus_count": int(g["bonus_count"]),
+        "game": args.game,
     }
     result = analyze(rows, config)
     summary = write_outputs(result, abs_path(config, "analysis.output_dir"))

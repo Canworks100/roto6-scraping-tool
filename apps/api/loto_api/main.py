@@ -19,12 +19,18 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from loto6.analyze import analyze, to_payload  # noqa: E402
+from loto6.analyze import (  # noqa: E402
+    analyze,
+    combo_payload,
+    load_period_rows,
+    number_payload,
+    parse_period,
+    to_payload,
+)
 from loto6.config import abs_path, load_config  # noqa: E402
 from loto6.flash_article import article_or_build, list_articles  # noqa: E402
 from loto6.games import get_game, public_game_list  # noqa: E402
 from loto6.generate import generate_combos  # noqa: E402
-from loto6.scrape import years_ago  # noqa: E402
 from loto6.storage import Store, row_to_draw  # noqa: E402
 
 from loto_api.rate_limit import RateLimiter  # noqa: E402
@@ -95,7 +101,7 @@ def parse_game(game: str) -> dict[str, Any]:
 
 
 class GenerateBody(BaseModel):
-    tickets: int = Field(default=5, ge=1, le=20)
+    tickets: int = Field(default=1, ge=1, le=20)
     mode: Literal["hot", "balanced"] = "hot"
     recent_draws: int | None = Field(default=None, ge=1, le=10000)
     recent_years: int | None = Field(default=None, ge=1, le=50)
@@ -190,16 +196,23 @@ def trends(
     game: str,
     store: Annotated[Store, Depends(get_store)],
     years: int = Query(default=10, ge=1, le=40),
+    period: str | None = Query(default="all"),
 ) -> dict[str, Any]:
     g = parse_game(game)
-    start = years_ago(years)
-    rows = store.load_draws(start_date=start, game=game)
+    try:
+        key = parse_period(period, years if period is None else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rows = load_period_rows(store, game, key)
     cfg = dict(CONFIG)
+    cfg["_game"] = game
     cfg["lottery"] = {
         **dict(CONFIG.get("lottery") or {}),
         "max_number": int(g["max_number"]),
         "main_count": int(g["main_count"]),
         "min_number": int(g["min_number"]),
+        "bonus_count": int(g["bonus_count"]),
+        "game": game,
     }
     latest_row = store.latest_draw(game)
     latest = None if latest_row is None else row_to_draw(latest_row, int(g["main_count"]))
@@ -209,16 +222,149 @@ def trends(
             "error": "分析できる当せんデータがありません",
             "meta": {"draw_count": 0},
             "game": game,
+            "period": key,
             "latest": latest,
             "prize_ranks": ranks,
         }
     result = analyze(rows, cfg)
-    payload = to_payload(result)
+    payload = to_payload(result, key)
     payload["meta"]["years"] = years
+    payload["meta"]["game_draw_count"] = store.count_draws(game)
     payload["game"] = game
     payload["latest"] = latest
     payload["prize_ranks"] = ranks
     return payload
+
+
+@app.get("/api/{game}/combo")
+def combo(
+    request: Request,
+    game: str,
+    store: Annotated[Store, Depends(get_store)],
+    n: Annotated[list[int] | None, Query()] = None,
+    numbers: Annotated[list[int] | None, Query()] = None,
+    period: str | None = Query(default="all"),
+) -> dict[str, Any]:
+    if not SEARCH_LIMITER.allow(f"combo:{client_ip(request)}"):
+        raise HTTPException(status_code=429, detail="リクエストが多すぎます。しばらくしてから再度お試しください。")
+    g = parse_game(game)
+    min_n = int(g["min_number"])
+    max_n = int(g["max_number"])
+    main_count = int(g["main_count"])
+    raw = list(n or []) + list(numbers or [])
+    cleaned: list[int] = []
+    seen: set[int] = set()
+    for value in raw:
+        if value < min_n or value > max_n:
+            raise HTTPException(status_code=400, detail=f"数字は{min_n}〜{max_n}の整数です")
+        if value in seen:
+            continue
+        seen.add(int(value))
+        cleaned.append(int(value))
+    if len(cleaned) != main_count:
+        raise HTTPException(status_code=400, detail=f"本数字は{main_count}個選んでください")
+    try:
+        key = parse_period(period, None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rows = load_period_rows(store, game, key)
+    cfg = dict(CONFIG)
+    cfg["_game"] = game
+    cfg["prize_grades"] = int(g["prize_grades"])
+    cfg["lottery"] = {
+        **dict(CONFIG.get("lottery") or {}),
+        "max_number": max_n,
+        "main_count": main_count,
+        "min_number": min_n,
+        "bonus_count": int(g["bonus_count"]),
+        "prize_grades": int(g["prize_grades"]),
+        "game": game,
+    }
+    if not rows:
+        raise HTTPException(status_code=404, detail="分析できる当せんデータがありません")
+    try:
+        payload = combo_payload(rows, cleaned, cfg, key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    payload["game"] = game
+    return payload
+
+
+@app.get("/api/{game}/numbers/{n}")
+def number_detail(
+    game: str,
+    n: int,
+    store: Annotated[Store, Depends(get_store)],
+    period: str | None = Query(default="all"),
+) -> dict[str, Any]:
+    g = parse_game(game)
+    min_n = int(g["min_number"])
+    max_n = int(g["max_number"])
+    if n < min_n or n > max_n:
+        raise HTTPException(status_code=404, detail="見つかりません")
+    try:
+        key = parse_period(period, None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rows = load_period_rows(store, game, key)
+    if not rows:
+        raise HTTPException(status_code=404, detail="見つかりません")
+    cfg = dict(CONFIG)
+    cfg["_game"] = game
+    cfg["lottery"] = {
+        **dict(CONFIG.get("lottery") or {}),
+        "max_number": max_n,
+        "main_count": int(g["main_count"]),
+        "min_number": min_n,
+        "bonus_count": int(g["bonus_count"]),
+        "game": game,
+    }
+    result = analyze(rows, cfg)
+    searched = store.search_numbers([n], game=game, main_count=int(g["main_count"]), limit=20, offset=0)
+    payload = number_payload(result, n, searched["items"], int(searched["total"]))
+    payload["game"] = game
+    payload["period"] = key
+    if payload.get("meta") is not None:
+        payload["meta"]["game_draw_count"] = store.count_draws(game)
+    return payload
+
+
+def _one_combo(store: Store, game: str, g: dict[str, Any], seed: int) -> list[int]:
+    result = generate_combos(
+        store,
+        game=game,
+        main_count=int(g["main_count"]),
+        max_number=int(g["max_number"]),
+        min_number=int(g["min_number"]),
+        tickets=1,
+        mode="hot",
+        seed=seed,
+    )
+    return list(result["combos"][0]["numbers"])
+
+
+@app.get("/api/{game}/week-pick")
+def week_pick(game: str, store: Annotated[Store, Depends(get_store)]) -> dict[str, Any]:
+    g = parse_game(game)
+    row = store.latest_draw(game)
+    if row is None:
+        raise HTTPException(status_code=404, detail="当せんデータがありません")
+    latest = row_to_draw(row, int(g["main_count"]))
+    last_no = int(latest["draw_no"])
+    previous = _one_combo(store, game, g, last_no)
+    nxt = _one_combo(store, game, g, last_no + 1)
+    actual = set(latest["numbers"])
+    matched = [n for n in previous if n in actual]
+    return {
+        "game": game,
+        "label": g["label"],
+        "latest": latest,
+        "next_draw_no": last_no + 1,
+        "next": nxt,
+        "previous": previous,
+        "matched": matched,
+        "match_count": len(matched),
+    }
 
 
 @app.get("/api/{game}/latest")
