@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ロト6</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #F3F5F7;
+      --surface: #FFFFFF;
+      --ink: #14202E;
+      --muted: #56637A;
+      --line: #C9D1DB;
+      --bar: #12283F;
+      --rail: #0D1E30;
+      --accent: #C74C0A;
+      --accent-ink: #FFFFFF;
+      --warn-ink: #7A2E0B;
+      --warn-mark: #B45309;
+      --ok-ink: #14532D;
+      --ok-mark: #15803D;
+      --err-ink: #7F1D1D;
+      --err-mark: #B91C1C;
+      --zebra: #EEF1F4;
+      --select: #DCE7F5;
+      --skip: #F1E7DC;
+      --num: "Cascadia Mono", "Consolas", "Courier New", monospace;
+      --ui: "Yu Gothic UI", "Meiryo UI", "Segoe UI", Meiryo, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 14px/1.35 var(--ui);
+      overflow: hidden;
+    }
+    button, input, select { font: inherit; color: var(--ink); }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; color: var(--muted); }
+    .app {
+      display: grid;
+      grid-template-rows: 36px 1fr 22px;
+      height: 100%;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 10px;
+      background: var(--bar);
+      color: #E8EEF5;
+    }
+    .topbar .brand { font-weight: 700; letter-spacing: 0.04em; font-size: 15px; }
+    .topbar .meta { color: #A8B4C4; }
+    .topbar .spacer { flex: 1; }
+    .shell {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      min-height: 0;
+    }
+    .rail {
+      background: var(--rail);
+      color: #C5D0DC;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #08131F;
+    }
+    .rail button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 58px;
+      border: 0;
+      border-bottom: 1px solid #13283C;
+      background: transparent;
+      color: #9AABC0;
+      padding: 0;
+    }
+    .rail button .ico {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+    }
+    .rail button .ico svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+    }
+    .rail button .lbl {
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .rail button.active {
+      background: #16324D;
+      color: #FFFFFF;
+      border-left: 2px solid var(--accent);
+    }
+    .rail button:hover { color: #E8EEF5; }
+    .workspace {
+      display: grid;
+      grid-template-rows: 30px 1fr;
+      min-width: 0;
+      min-height: 0;
+    }
+    .tabstrip {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 0 8px;
+    }
+    .tabstrip button {
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0 12px;
+      height: 100%;
+    }
+    .tabstrip button:first-child { border-left: 1px solid var(--line); }
+    .tabstrip button.active {
+      background: var(--bg);
+      color: var(--ink);
+      font-weight: 700;
+      border-bottom: 2px solid var(--bar);
+    }
+    .tabstrip .hint {
+      margin-left: auto;
+      align-self: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .body {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
+    }
+    [hidden] { display: none !important; }
+    .panel { display: none; height: 100%; }
+    .panel.active { display: grid; gap: 8px; min-height: 0; align-content: start; }
+    #panel-ledger.active { grid-template-rows: auto auto auto minmax(180px, 1fr); }
+    #panel-ledger.is-form { grid-template-rows: auto auto minmax(220px, 1fr); }
+    #panel-trends.active { grid-template-rows: auto auto minmax(220px, 1fr); }
+    #panel-history.active { grid-template-rows: auto minmax(220px, 1fr); }
+    #panel-history.is-search { grid-template-rows: auto auto auto minmax(180px, 1fr); }
+    .number-pad {
+      display: grid;
+      grid-template-columns: repeat(11, minmax(28px, 1fr));
+      gap: 3px;
+      min-width: 0;
+    }
+    .number-pad button {
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--num);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0;
+    }
+    .number-pad button:hover { background: var(--bg); }
+    .number-pad button.is-on {
+      border-color: var(--bar);
+      background: #E8EEF5;
+    }
+    .number-pad button:disabled { opacity: 0.35; }
+    .search-slots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-slots .slot {
+      width: 36px;
+      height: 32px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--surface);
+      font-family: var(--num);
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .search-slots .slot.is-on { border-color: var(--bar); background: #E8EEF5; }
+    .search-slots .slot.is-draft {
+      border-color: var(--warn-mark);
+      color: var(--warn-ink);
+    }
+    .hit-num {
+      border-color: var(--ok-mark) !important;
+      background: #E8F5EC !important;
+      color: var(--ok-ink) !important;
+    }
+    .stat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat-chips .chip {
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 4px 8px;
+      background: var(--surface);
+      font-size: 13px;
+    }
+    .stat-chips .chip strong { font-family: var(--num); }
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .kpi > div {
+      padding: 6px 8px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+    .kpi > div:last-child { border-right: 0; }
+    .kpi span { display: block; color: var(--muted); font-size: 13px; }
+    .kpi strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 18px;
+      font-family: var(--num);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+    .kpi em { display: block; margin-top: 1px; font-style: normal; color: var(--muted); font-size: 13px; }
+    .kpi .minus strong { color: var(--err-ink); }
+    .kpi .plus strong { color: var(--ok-ink); }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 8px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+    .toolbar .grow { flex: 1; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--surface);
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .btn .key {
+      display: inline-block;
+      padding: 1px 4px;
+      border: 1px solid #31475F;
+      border-radius: 2px;
+      background: var(--bar);
+      color: #E8EEF5;
+      font: 12px/1.2 var(--num);
+    }
+    .btn-primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 700;
+    }
+    .btn-primary .key {
+      border-color: #8E3607;
+      background: #8E3607;
+      color: #FFF4EC;
+    }
+    .btn-important {
+      border-color: var(--bar);
+      background: var(--bar);
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+    .btn-important .key {
+      border-color: #0B1A2A;
+      background: #0B1A2A;
+    }
+    .btn-warn { color: var(--warn-ink); border-color: var(--warn-mark); }
+    .btn-danger { color: var(--err-ink); border-color: var(--err-mark); }
+    label.field {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 2px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    input, select {
+      height: 30px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--surface);
+    }
+    input:focus, select:focus, button:focus { outline: 1px solid var(--bar); outline-offset: 0; }
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 8px;
+      min-height: 0;
+    }
+    .box {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .box > h2 {
+      margin: 0;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 700;
+      background: #E9EDF2;
+    }
+    .box > .inner { padding: 8px; overflow: auto; min-height: 0; flex: 1; }
+    .box > .inner.scroll-x { overflow: auto; }
+    .history-table .balls-view { min-width: 150px; }
+    #ledgerSplit { min-height: 220px; }
+    #chartBox { min-height: 220px; }
+    #chartBox > .inner {
+      flex: 1 1 auto;
+      min-height: 180px;
+      overflow: hidden;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+    .balls { display: flex; gap: 4px; }
+    .balls input {
+      width: 40px;
+      text-align: center;
+      font-family: var(--num);
+      font-size: 16px;
+      padding: 0;
+    }
+    .official { min-height: 22px; color: var(--muted); margin: 6px 0; }
+    .money { font-family: var(--num); font-variant-numeric: tabular-nums; }
+    .error {
+      min-height: 1.2em;
+      color: var(--err-ink);
+      font-size: 13px;
+      margin: 6px 0;
+    }
+    .note { color: var(--muted); font-size: 13px; }
+    .status-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .status-inline .mark {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid currentColor;
+      background: transparent;
+      flex: 0 0 auto;
+    }
+    .status-inline.is-ok { color: var(--ok-ink); }
+    .status-inline.is-ok .mark { background: var(--ok-mark); border-color: var(--ok-mark); }
+    .status-inline.is-warn { color: var(--warn-ink); }
+    .status-inline.is-warn .mark { background: var(--warn-mark); border-color: var(--warn-mark); }
+    .status-inline.is-err { color: var(--err-ink); }
+    .status-inline.is-err .mark { background: var(--err-mark); border-color: var(--err-mark); }
+    .status-inline.is-run { color: var(--muted); }
+    .status-inline.is-run .mark { border-color: var(--bar); background: var(--bar); }
+    table.data {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--surface);
+    }
+    table.data th, table.data td {
+      border: 1px solid var(--line);
+      padding: 3px 6px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    table.data th {
+      background: #E1E6EC;
+      color: var(--ink);
+      font-weight: 700;
+      text-align: left;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    table.data tbody tr:nth-child(even) { background: var(--zebra); }
+    table.data tbody tr.selected { background: var(--select); }
+    table.data tbody tr.skip { background: var(--skip); color: var(--warn-ink); }
+    table.data td.num, table.data th.num {
+      text-align: right;
+      font-family: var(--num);
+      font-variant-numeric: tabular-nums;
+    }
+    table.data td.rn, table.data th.rn {
+      width: 36px;
+      text-align: right;
+      color: var(--muted);
+      font-family: var(--num);
+      font-variant-numeric: tabular-nums;
+    }
+    .balls-view { display: inline-flex; gap: 3px; flex-wrap: nowrap; }
+    .balls-view b, .balls-view i {
+      display: inline-grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
+      border: 1px solid var(--bar);
+      border-radius: 2px;
+      background: var(--surface);
+      color: var(--ink);
+      font: 13px/1 var(--num);
+      font-weight: 700;
+    }
+    .balls-view i {
+      border-color: var(--warn-mark);
+      color: var(--warn-ink);
+      font-style: normal;
+    }
+    .balls-view b.is-hit {
+      border-color: var(--err-mark);
+      color: #C41E1E;
+      background: #FFF5F5;
+    }
+    .balls-view b.is-bonus {
+      border-color: var(--warn-mark);
+      color: var(--warn-ink);
+      background: #FFF8F0;
+    }
+    #chart {
+      width: 100%;
+      height: 180px;
+      min-height: 180px;
+      display: block;
+    }
+    #chart[hidden], #chartEmpty[hidden] { display: none !important; }
+    .empty { color: var(--muted); padding: 8px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-height: 0; }
+    .barfill {
+      height: 8px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .barfill > i {
+      display: block;
+      height: 100%;
+      background: var(--bar);
+    }
+    pre.summary {
+      margin: 0;
+      white-space: pre-wrap;
+      font: 14px/1.45 var(--ui);
+      color: var(--ink);
+    }
+    .dock {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px;
+      background: var(--bar);
+      color: #D5DEE8;
+      font-size: 13px;
+    }
+    .statusbar .sep { color: #6F8196; }
+    .statusbar .right { margin-left: auto; color: #A8B4C4; }
+    .statusbar .mark {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid #7C8EA3;
+      background: transparent;
+    }
+    .statusbar.is-ok .mark { background: #22C55E; border-color: #22C55E; }
+    .statusbar.is-warn .mark { background: #F59E0B; border-color: #F59E0B; }
+    .statusbar.is-err .mark { background: #EF4444; border-color: #EF4444; }
+    .statusbar.is-run .mark { background: #38BDF8; border-color: #38BDF8; }
+    @media (max-width: 900px) {
+      .split, .grid-2, .kpi { grid-template-columns: 1fr; }
+      .kpi > div { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">ロト6</div>
+      <div class="meta" id="topMeta">収支 / 傾向 / 履歴</div>
+      <div class="spacer"></div>
+      <button class="btn" type="button" id="quit" title="終了">終了 <span class="key">Alt F4</span></button>
+    </header>
+    <div class="shell">
+      <nav class="rail" aria-label="主メニュー">
+        <button type="button" class="active" data-tab="ledger" title="収支" aria-label="収支">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15v-4"/><path d="M12 15V8"/><path d="M16 15v-6"/></svg>
+          </span>
+          <span class="lbl">収支</span>
+        </button>
+        <button type="button" data-tab="trends" title="数字の傾向" aria-label="数字の傾向">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 18h16"/><path d="M5 14l4-5 4 3 5-7"/><path d="M18 5h2v2"/></svg>
+          </span>
+          <span class="lbl">傾向</span>
+        </button>
+        <button type="button" data-tab="history" title="過去の当せん" aria-label="過去の当せん">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+          </span>
+          <span class="lbl">履歴</span>
+        </button>
+      </nav>
+      <div class="workspace">
+        <div class="tabstrip" id="tabstrip">
+          <button type="button" class="active" data-sub="main" id="subMain">購入一覧</button>
+          <button type="button" data-sub="form" id="subForm">手入力</button>
+          <span class="hint" id="tabHint">取り込みは橙ボタン1つ。表で確認。</span>
+        </div>
+        <main class="body">
+          <div class="panel active" id="panel-ledger">
+            <div class="kpi">
+              <div><span>購入口</span><strong id="ticketCount">0</strong><em id="hitCount">的中 0</em></div>
+              <div><span>購入金額</span><strong id="purchaseTotal">¥0</strong><em id="pendingCost">未抽せん ¥0</em></div>
+              <div><span>当選額</span><strong id="prizeTotal">¥0</strong><em>確定分のみ</em></div>
+              <div id="profitCard"><span>損益</span><strong id="profit">¥0</strong><em>当選 − 購入（確定分）</em></div>
+            </div>
+            <div class="toolbar">
+              <button class="btn btn-primary" id="importOfficial" type="button">公式から取込 <span class="key">F2</span></button>
+              <span class="status-inline is-ok" id="importStatus"><span class="mark"></span><span class="txt">待機</span></span>
+              <div class="grow"></div>
+              <span class="note">パスワードは入れない。ログインはChrome側。</span>
+            </div>
+            <div class="split" id="ledgerSplit">
+              <section class="box" id="formBox">
+                <h2 id="formTitle">手入力</h2>
+                <div class="inner">
+                  <p class="note">売り場購入など、公式に無い分だけ。</p>
+                  <form id="form">
+                    <div class="row">
+                      <label class="field">回号
+                        <input id="drawNo" list="drawList" inputmode="numeric" required>
+                        <datalist id="drawList"></datalist>
+                      </label>
+                      <label class="field">購入日
+                        <input id="purchasedOn" type="date" required>
+                      </label>
+                    </div>
+                    <div class="official" id="official">回号を入れると当せん数字を表示</div>
+                    <label class="field">本数字
+                      <div class="balls" id="balls">
+                        <input inputmode="numeric" required>
+                        <input inputmode="numeric" required>
+                        <input inputmode="numeric" required>
+                        <input inputmode="numeric" required>
+                        <input inputmode="numeric" required>
+                        <input inputmode="numeric" required>
+                      </div>
+                    </label>
+                    <div class="row" style="margin-top:6px">
+                      <label class="field">口数
+                        <input id="ticketCountInput" type="number" min="1" value="1" required>
+                      </label>
+                      <label class="field">1口
+                        <input id="unitPrice" type="number" min="0" value="200" required>
+                      </label>
+                      <div class="money">金額 <b id="costPreview">¥200</b></div>
+                    </div>
+                    <div class="row">
+                      <label class="field">当選額手入力（空＝自動）
+                        <input id="prizeOverride" inputmode="numeric" placeholder="空欄">
+                      </label>
+                      <label class="field" style="flex:1">メモ
+                        <input id="note" maxlength="200">
+                      </label>
+                    </div>
+                    <p class="error" id="error"></p>
+                    <div class="row">
+                      <button class="btn btn-important" type="submit" id="save">記録する <span class="key">Ctrl S</span></button>
+                      <button class="btn" type="button" id="clear">クリア <span class="key">Esc</span></button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+              <section class="box" id="chartBox">
+                <h2>損益推移</h2>
+                <div class="inner">
+                  <p class="empty" id="chartEmpty">確定記録があると累積損益を描く</p>
+                  <svg id="chart" viewBox="0 0 640 180" hidden></svg>
+                </div>
+              </section>
+            </div>
+            <section class="box" id="ticketBox" style="grid-column:1/-1;min-height:220px">
+              <h2>購入履歴</h2>
+              <div class="inner" style="padding:0">
+                <table class="data">
+                  <thead>
+                    <tr>
+                      <th class="rn">#</th>
+                      <th>回</th>
+                      <th>数字</th>
+                      <th class="num">口</th>
+                      <th class="num">購入</th>
+                      <th>結果</th>
+                      <th class="num">当選</th>
+                      <th class="num">損益</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty">記録なし</p>
+              </div>
+            </section>
+          </div>
+
+          <div class="panel" id="panel-trends">
+            <div class="toolbar">
+              <label class="field">期間
+                <select id="analysisYears">
+                  <option value="1">直近1年</option>
+                  <option value="3">直近3年</option>
+                  <option value="5">直近5年</option>
+                  <option value="10" selected>直近10年</option>
+                </select>
+              </label>
+              <button class="btn btn-important" type="button" id="reloadAnalysis">再集計 <span class="key">F5</span></button>
+              <span class="note" id="analysisMeta"></span>
+            </div>
+            <div class="kpi" id="trendCards"></div>
+            <div class="grid-2">
+              <section class="box">
+                <h2>出現回数</h2>
+                <div class="inner" style="padding:0">
+                  <table class="data">
+                    <thead>
+                      <tr>
+                        <th class="rn">#</th>
+                        <th>数字</th>
+                        <th class="num">回数</th>
+                        <th class="num">確率</th>
+                        <th class="num">経過</th>
+                        <th>分布</th>
+                      </tr>
+                    </thead>
+                    <tbody id="freqRows"></tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="box">
+                <h2>同時出現 / 偶数奇数 / 合計</h2>
+                <div class="inner">
+                  <h3 class="note" style="margin:0 0 4px">2数字</h3>
+                  <table class="data"><tbody id="pairRows"></tbody></table>
+                  <h3 class="note" style="margin:10px 0 4px">3数字</h3>
+                  <table class="data"><tbody id="tripleRows"></tbody></table>
+                  <h3 class="note" style="margin:10px 0 4px">偶数・奇数</h3>
+                  <table class="data"><tbody id="oddEvenRows"></tbody></table>
+                  <h3 class="note" style="margin:10px 0 4px">合計</h3>
+                  <pre class="summary" id="sumSummary"></pre>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div class="panel" id="panel-history">
+            <div class="toolbar" id="historyListBar">
+              <span class="note" id="historyMeta"></span>
+              <div class="grow"></div>
+              <button class="btn" type="button" id="historyReload">再読込 <span class="key">F5</span></button>
+            </div>
+            <div class="toolbar" id="historySearchBar" hidden>
+              <label class="field">購入から読込
+                <select id="searchFromTicket">
+                  <option value="">手入力</option>
+                </select>
+              </label>
+              <div class="search-slots" id="searchSlots" aria-live="polite"></div>
+              <span class="note" id="searchHint">1〜43を押す。もう一度押すと外す。最大6個。</span>
+              <button class="btn" type="button" id="searchPop">1個消す</button>
+              <button class="btn btn-important" type="button" id="searchRun">検索 <span class="key">Enter</span></button>
+              <button class="btn" type="button" id="searchClear">全消 <span class="key">Esc</span></button>
+              <div class="grow"></div>
+              <button class="btn" type="button" id="searchPrev">前へ</button>
+              <span class="note money" id="searchPage"></span>
+              <button class="btn" type="button" id="searchNext">次へ</button>
+            </div>
+            <div class="box" id="searchPadBox" hidden>
+              <h2>数字を選ぶ</h2>
+              <div class="inner" style="padding:6px">
+                <div class="number-pad" id="numberPad" aria-label="1から43"></div>
+              </div>
+            </div>
+            <div class="box" id="searchSummaryBox" hidden>
+              <h2>検索条件と出現</h2>
+              <div class="inner">
+                <p class="note" id="searchResultMeta">1〜43から選ぶ。選んだ数字がすべて入った回を出す。</p>
+                <div class="stat-chips" id="searchStats"></div>
+              </div>
+            </div>
+            <section class="box" style="min-height:0" id="historyListBox">
+              <h2>過去の当せん番号</h2>
+              <div class="inner scroll-x" style="padding:0">
+                <table class="data history-table">
+                  <thead>
+                    <tr>
+                      <th class="rn">#</th>
+                      <th>回</th>
+                      <th>抽せん日</th>
+                      <th>本数字</th>
+                      <th>ボーナス</th>
+                      <th class="num">1等</th>
+                      <th class="num">販売</th>
+                      <th class="num">CO</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyRows"></tbody>
+                </table>
+                <p class="empty" id="historyEmpty">当せんデータなし</p>
+              </div>
+            </section>
+            <section class="box" style="min-height:0" id="historySearchBox" hidden>
+              <h2>一致した回</h2>
+              <div class="inner" style="padding:0">
+                <table class="data">
+                  <thead>
+                    <tr>
+                      <th class="rn">#</th>
+                      <th>回</th>
+                      <th>抽せん日</th>
+                      <th class="num">一致</th>
+                      <th>本数字</th>
+                      <th>ボーナス</th>
+                      <th class="num">1等</th>
+                    </tr>
+                  </thead>
+                  <tbody id="searchRows"></tbody>
+                </table>
+                <p class="empty" id="searchEmpty">数字を選ぶと結果が出る</p>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+    <footer class="statusbar is-ok" id="statusbar">
+      <span class="mark"></span>
+      <span id="statusText">待機</span>
+      <span class="sep">|</span>
+      <span id="statusDetail">ローカルDB</span>
+      <span class="right" id="statusRight">127.0.0.1</span>
+    </footer>
+  </div>
+  <script>
+    const balls = [...document.querySelectorAll("#balls input")];
+    const state = {
+      editing: null,
+      draws: [],
+      tickets: [],
+      tab: "ledger",
+      sub: "main",
+      historyTotal: 0,
+      analysisLoaded: false,
+      historyLoaded: false,
+      searchNumbers: [],
+      searchOffset: 0,
+      searchLimit: 40,
+      searchTotal: 0,
+      searchTimer: null,
+    };
+
+    function yen(value) {
+      if (value === null || value === undefined) return "—";
+      const sign = value < 0 ? "-" : "";
+      return sign + "¥" + Math.abs(value).toLocaleString("ja-JP");
+    }
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function today() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+    async function api(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "失敗しました");
+      return data;
+    }
+    function costNow() {
+      const count = Number(document.getElementById("ticketCountInput").value || 0);
+      const unit = Number(document.getElementById("unitPrice").value || 0);
+      document.getElementById("costPreview").textContent = yen(count * unit);
+    }
+    function setError(message) {
+      document.getElementById("error").textContent = message || "";
+      if (message) setStatus("err", "入力エラー", message);
+    }
+    function ballHtml(numbers, bonus, hits) {
+      const hitSet = hits instanceof Set ? hits : new Set(hits || []);
+      const mains = numbers.map((n) => {
+        const cls = hitSet.has(n) ? ' class="is-hit"' : "";
+        return "<b" + cls + ">" + pad(n) + "</b>";
+      }).join("");
+      const bonusHtml = bonus === null || bonus === undefined ? "" : "<i>" + pad(bonus) + "</i>";
+      return "<span class='balls-view'>" + mains + bonusHtml + "</span>";
+    }
+    function setStatus(kind, text, detail) {
+      const bar = document.getElementById("statusbar");
+      bar.className = "statusbar is-" + kind;
+      document.getElementById("statusText").textContent = text;
+      document.getElementById("statusDetail").textContent = detail || "";
+    }
+    function setImportStatus(kind, text) {
+      const el = document.getElementById("importStatus");
+      el.className = "status-inline is-" + kind;
+      el.querySelector(".txt").textContent = text;
+    }
+    function syncChrome() {
+      const map = {
+        ledger: { title: "購入一覧", hint: "取り込みは橙ボタン1つ。表で確認。", subs: [
+          ["main", "購入一覧"], ["form", "手入力"]
+        ]},
+        trends: { title: "集計", hint: "期間を選んで再集計。", subs: [["main", "集計"]] },
+        history: { title: state.sub === "search" ? "数字検索" : "当せん一覧",
+          hint: state.sub === "search" ? "1桁ずつ打つ。確定数字が全部入った回を出す。" : "新しい回が上。全件表示。",
+          subs: [["main", "当せん一覧"], ["search", "数字検索"]] },
+      };
+      const conf = map[state.tab];
+      document.getElementById("topMeta").textContent = conf.title;
+      document.getElementById("tabHint").textContent = conf.hint;
+      const strip = document.getElementById("tabstrip");
+      [...strip.querySelectorAll("button")].forEach((b) => b.remove());
+      conf.subs.forEach(([id, label]) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.dataset.sub = id;
+        btn.textContent = label;
+        if (state.sub === id) btn.classList.add("active");
+        btn.addEventListener("click", () => {
+          state.sub = id;
+          strip.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.sub === id));
+          layoutWorkspace();
+        });
+        strip.insertBefore(btn, document.getElementById("tabHint"));
+      });
+      layoutWorkspace();
+    }
+    function layoutWorkspace() {
+      layoutLedger();
+      layoutHistory();
+    }
+    function layoutLedger() {
+      if (state.tab !== "ledger") return;
+      const panel = document.getElementById("panel-ledger");
+      const formBox = document.getElementById("formBox");
+      const ticketBox = document.getElementById("ticketBox");
+      const split = document.getElementById("ledgerSplit");
+      const chartBox = document.getElementById("chartBox");
+      const isForm = state.sub === "form";
+      panel.classList.toggle("is-form", isForm);
+      formBox.hidden = !isForm;
+      ticketBox.hidden = isForm;
+      chartBox.hidden = false;
+      split.hidden = false;
+      split.style.display = "grid";
+      split.style.gridTemplateColumns = isForm ? "1.1fr 0.9fr" : "1fr";
+    }
+    function layoutHistory() {
+      if (state.tab !== "history") return;
+      const isSearch = state.sub === "search";
+      document.getElementById("panel-history").classList.toggle("is-search", isSearch);
+      document.getElementById("historyListBar").hidden = isSearch;
+      document.getElementById("historyListBox").hidden = isSearch;
+      document.getElementById("historySearchBar").hidden = !isSearch;
+      document.getElementById("searchPadBox").hidden = !isSearch;
+      document.getElementById("searchSummaryBox").hidden = !isSearch;
+      document.getElementById("historySearchBox").hidden = !isSearch;
+      if (isSearch) {
+        renderSearchSlots();
+        fillTicketSelect();
+        if (state.searchNumbers.length) scheduleSearch(true);
+      } else if (!state.historyLoaded) {
+        loadHistory();
+      }
+    }
+
+    function showTab(name) {
+      state.tab = name;
+      if (name === "ledger") state.sub = "main";
+      if (name === "trends") state.sub = "main";
+      if (name === "history" && state.sub !== "search") state.sub = "main";
+      document.querySelectorAll(".rail button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === name);
+      });
+      document.querySelectorAll(".panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === "panel-" + name);
+      });
+      syncChrome();
+      if (name === "trends" && !state.analysisLoaded) loadAnalysis();
+      if (name === "history" && state.sub === "main" && !state.historyLoaded) loadHistory();
+      if (name === "ledger") setStatus("ok", "待機", "収支");
+      if (name === "trends") setStatus("ok", "待機", "傾向");
+      if (name === "history") setStatus("ok", "待機", state.sub === "search" ? "数字検索" : "履歴");
+    }
+
+    async function loadDrawHint() {
+      const drawNo = document.getElementById("drawNo").value.trim();
+      const box = document.getElementById("official");
+      if (!drawNo) { box.textContent = "回号を入れると当せん数字を表示"; return; }
+      try {
+        const draw = await api("/api/draws/" + drawNo);
+        box.innerHTML = draw.draw_date + " " + ballHtml(draw.numbers, draw.bonus);
+      } catch (err) {
+        box.textContent = "第" + drawNo + "回は未取込。抽せん後に自動判定。";
+      }
+    }
+
+    function renderSearchSlots() {
+      const box = document.getElementById("searchSlots");
+      const parts = [];
+      for (let i = 0; i < 6; i++) {
+        const value = state.searchNumbers[i];
+        parts.push(value !== undefined ? `<span class="slot is-on">${pad(value)}</span>` : `<span class="slot">··</span>`);
+      }
+      box.innerHTML = parts.join("");
+      document.getElementById("searchHint").textContent =
+        state.searchNumbers.length
+          ? `選択 ${state.searchNumbers.map(pad).join(" ")}（${state.searchNumbers.length}/6）`
+          : "1〜43を押す。もう一度押すと外す。最大6個。";
+      renderNumberPad();
+    }
+    function renderNumberPad() {
+      const padEl = document.getElementById("numberPad");
+      if (!padEl.childElementCount) {
+        padEl.innerHTML = Array.from({ length: 43 }, (_, i) => {
+          const n = i + 1;
+          return `<button type="button" data-n="${n}">${pad(n)}</button>`;
+        }).join("");
+      }
+      const selected = new Set(state.searchNumbers);
+      const full = state.searchNumbers.length >= 6;
+      padEl.querySelectorAll("button[data-n]").forEach((button) => {
+        const n = Number(button.dataset.n);
+        const on = selected.has(n);
+        button.classList.toggle("is-on", on);
+        button.disabled = full && !on;
+      });
+    }
+    function fillTicketSelect() {
+      const select = document.getElementById("searchFromTicket");
+      const current = select.value;
+      select.innerHTML = '<option value="">手入力</option>' + state.tickets.map((ticket) => {
+        const label = `第${ticket.draw_no} ${ticket.numbers.map(pad).join(" ")}`;
+        return `<option value="${ticket.id}">${label}</option>`;
+      }).join("");
+      if ([...select.options].some((o) => o.value === current)) select.value = current;
+    }
+    function toggleSearchNumber(value) {
+      if (value < 1 || value > 43) {
+        setStatus("err", "範囲外", "1〜43を指定");
+        return;
+      }
+      const index = state.searchNumbers.indexOf(value);
+      if (index >= 0) {
+        state.searchNumbers.splice(index, 1);
+      } else if (state.searchNumbers.length >= 6) {
+        setStatus("warn", "上限6個", "1個消してから追加");
+        return;
+      } else {
+        state.searchNumbers.push(value);
+        state.searchNumbers.sort((a, b) => a - b);
+      }
+      state.searchOffset = 0;
+      renderSearchSlots();
+      scheduleSearch(false);
+    }
+    function backspaceSearch() {
+      if (!state.searchNumbers.length) return;
+      state.searchNumbers.pop();
+      state.searchOffset = 0;
+      renderSearchSlots();
+      scheduleSearch(false);
+    }
+    function clearSearch() {
+      state.searchNumbers = [];
+      state.searchOffset = 0;
+      state.searchTotal = 0;
+      document.getElementById("searchRows").innerHTML = "";
+      document.getElementById("searchStats").innerHTML = "";
+      document.getElementById("searchEmpty").hidden = false;
+      document.getElementById("searchEmpty").textContent = "数字を選ぶと結果が出る";
+      document.getElementById("searchResultMeta").textContent = "1〜43から選ぶ。選んだ数字がすべて入った回を出す。";
+      document.getElementById("searchPage").textContent = "";
+      document.getElementById("searchFromTicket").value = "";
+      renderSearchSlots();
+      setStatus("ok", "クリア", "数字検索");
+    }
+    function scheduleSearch(immediate) {
+      if (state.searchTimer) clearTimeout(state.searchTimer);
+      if (!state.searchNumbers.length) {
+        document.getElementById("searchRows").innerHTML = "";
+        document.getElementById("searchStats").innerHTML = "";
+        document.getElementById("searchEmpty").hidden = false;
+        document.getElementById("searchEmpty").textContent = "数字を選ぶと結果が出る";
+        return;
+      }
+      const wait = immediate ? 0 : 180;
+      state.searchTimer = setTimeout(() => runNumberSearch(), wait);
+    }
+    async function runNumberSearch() {
+      if (!state.searchNumbers.length) {
+        setStatus("warn", "未入力", "数字を1個以上");
+        return;
+      }
+      setStatus("run", "検索中", state.searchNumbers.map(pad).join(" "));
+      try {
+        const qs = state.searchNumbers.map((n) => "n=" + n).join("&");
+        const data = await api(`/api/history/search?${qs}&limit=${state.searchLimit}&offset=${state.searchOffset}`);
+        state.searchTotal = data.total || 0;
+        const page = Math.floor(state.searchOffset / state.searchLimit) + 1;
+        const pages = Math.max(1, Math.ceil(state.searchTotal / state.searchLimit));
+        document.getElementById("searchPage").textContent = `${page} / ${pages}`;
+        document.getElementById("searchPrev").disabled = state.searchOffset <= 0;
+        document.getElementById("searchNext").disabled = state.searchOffset + state.searchLimit >= state.searchTotal;
+        const querySet = new Set(data.numbers || state.searchNumbers);
+        document.getElementById("searchResultMeta").textContent =
+          data.total === 0
+            ? `指定 ${data.numbers.map(pad).join(" ")} → 過去に同時出現なし`
+            : `指定 ${data.numbers.map(pad).join(" ")} → ${data.total.toLocaleString("ja-JP")}回（すべて含む）`;
+        document.getElementById("searchStats").innerHTML = (data.number_stats || []).map((row) => {
+          const last = row.last_draw_no == null ? "なし" : `第${row.last_draw_no}（${row.last_draw_date}）`;
+          return `<span class="chip"><strong>${pad(row.number)}</strong> ${row.count.toLocaleString("ja-JP")}回 / 直近 ${last}</span>`;
+        }).join("");
+        const body = document.getElementById("searchRows");
+        document.getElementById("searchEmpty").hidden = (data.items || []).length > 0;
+        if (!(data.items || []).length) {
+          document.getElementById("searchEmpty").textContent =
+            data.total === 0 ? "この組み合わせは出ていない" : "このページに行なし";
+        }
+        body.innerHTML = (data.items || []).map((item, index) => {
+          const rn = state.searchOffset + index + 1;
+          const prize1 = item.prizes?.["1"];
+          const nums = item.numbers.map((n) => {
+            const cls = querySet.has(n) ? " class=\"hit-num\"" : "";
+            return `<b${cls}>${pad(n)}</b>`;
+          }).join("");
+          return `<tr>
+            <td class="rn">${rn}</td>
+            <td>第${item.draw_no}</td>
+            <td class="money">${item.draw_date}</td>
+            <td class="num">${item.match_count}/${querySet.size}</td>
+            <td><span class="balls-view">${nums}</span></td>
+            <td>${ballHtml([], item.bonus)}</td>
+            <td class="num">${prize1 == null ? "なし" : yen(prize1)}</td>
+          </tr>`;
+        }).join("");
+        setStatus(
+          data.total ? "ok" : "warn",
+          data.total ? "ヒット" : "0件",
+          `${data.total.toLocaleString("ja-JP")}回`
+        );
+      } catch (err) {
+        setStatus("err", "検索失敗", err.message);
+        document.getElementById("searchEmpty").hidden = false;
+        document.getElementById("searchEmpty").textContent = err.message;
+      }
+    }
+
+    async function refresh() {
+      const [summary, tickets, draws] = await Promise.all([
+        api("/api/summary"),
+        api("/api/tickets"),
+        api("/api/draws"),
+      ]);
+      state.draws = draws;
+      state.tickets = tickets;
+      document.getElementById("drawList").innerHTML = draws.map((d) => `<option value="${d.draw_no}">第${d.draw_no}回 ${d.draw_date}</option>`).join("");
+      document.getElementById("ticketCount").textContent = summary.ticket_count.toLocaleString("ja-JP");
+      document.getElementById("hitCount").textContent = "的中 " + summary.hit_count.toLocaleString("ja-JP");
+      document.getElementById("purchaseTotal").textContent = yen(summary.purchase_total);
+      document.getElementById("pendingCost").textContent = "未抽せん " + summary.pending_count + " / " + yen(summary.pending_cost);
+      document.getElementById("prizeTotal").textContent = yen(summary.prize_total);
+      document.getElementById("profit").textContent = yen(summary.profit);
+      document.getElementById("profitCard").classList.toggle("plus", summary.profit > 0);
+      document.getElementById("profitCard").classList.toggle("minus", summary.profit < 0);
+      document.getElementById("statusRight").textContent =
+        summary.ticket_count.toLocaleString("ja-JP") + "口 / " + yen(summary.profit);
+      drawChart(summary.series);
+      drawRows(tickets);
+    }
+
+    function setHidden(el, hide) {
+      if (hide) el.setAttribute("hidden", "");
+      else el.removeAttribute("hidden");
+    }
+    function drawChart(series) {
+      const svg = document.getElementById("chart");
+      const empty = document.getElementById("chartEmpty");
+      if (!series.length) {
+        setHidden(svg, true);
+        setHidden(empty, false);
+        return;
+      }
+      setHidden(empty, true);
+      setHidden(svg, false);
+      const width = 640, height = 180, left = 48, right = 8, top = 10, bottom = 24;
+      const values = series.map((p) => p.profit);
+      let min = Math.min(0, ...values);
+      let max = Math.max(0, ...values);
+      if (min === max) { min -= 1; max += 1; }
+      const x = (i) => left + (series.length === 1 ? (width - left - right) / 2 : i * (width - left - right) / (series.length - 1));
+      const y = (v) => top + (max - v) * (height - top - bottom) / (max - min);
+      const line = series.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.profit).toFixed(1)).join(" ");
+      const zero = y(0);
+      const last = series[series.length - 1].profit;
+      const color = last > 0 ? "#15803D" : last < 0 ? "#B91C1C" : "#14202E";
+      const dots = series.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.profit).toFixed(1)}" r="2.5" fill="${color}"><title>第${p.draw_no}回 ${yen(p.profit)}</title></circle>`).join("");
+      svg.innerHTML =
+        `<line x1="${left}" y1="${zero}" x2="${width - right}" y2="${zero}" stroke="#C9D1DB"/>` +
+        `<text x="4" y="${zero + 3}" font-size="12" fill="#56637A" font-family="Consolas,monospace">0</text>` +
+        `<path d="${line}" fill="none" stroke="${color}" stroke-width="1.5"/>` +
+        dots +
+        `<text x="${left}" y="${height - 6}" font-size="12" fill="#56637A">第${series[0].draw_no}</text>` +
+        `<text x="${width - right}" y="${height - 6}" font-size="12" fill="#56637A" text-anchor="end">第${series[series.length - 1].draw_no}</text>`;
+    }
+
+    function drawRows(tickets) {
+      const body = document.getElementById("rows");
+      document.getElementById("empty").hidden = tickets.length > 0;
+      body.innerHTML = "";
+      tickets.forEach((ticket, index) => {
+        const tr = document.createElement("tr");
+        if (state.editing === ticket.id) tr.classList.add("selected");
+        if (ticket.status === "未抽せん") tr.classList.add("skip");
+        const rn = document.createElement("td");
+        rn.className = "rn";
+        rn.textContent = String(index + 1);
+        tr.append(rn);
+        tr.append(cell("第" + ticket.draw_no, ticket.draw_date || ticket.purchased_on));
+        tr.append(numberCell(ticket));
+        tr.append(num(String(ticket.ticket_count)));
+        tr.append(num(yen(ticket.cost)));
+        tr.append(resultCell(ticket));
+        tr.append(num(yen(ticket.prize)));
+        const profit = num(yen(ticket.profit));
+        if (ticket.profit > 0) profit.style.color = "var(--ok-ink)";
+        if (ticket.profit < 0) profit.style.color = "var(--err-ink)";
+        tr.append(profit);
+        const action = document.createElement("td");
+        const edit = document.createElement("button");
+        edit.className = "btn";
+        edit.type = "button";
+        edit.innerHTML = "修正";
+        edit.addEventListener("click", () => editTicket(ticket));
+        const del = document.createElement("button");
+        del.className = "btn btn-danger";
+        del.type = "button";
+        del.textContent = "削除";
+        del.addEventListener("click", () => removeTicket(ticket));
+        action.append(edit, " ", del);
+        tr.append(action);
+        body.append(tr);
+      });
+    }
+    function cell(title, sub) {
+      const td = document.createElement("td");
+      td.textContent = title;
+      if (sub) {
+        const small = document.createElement("div");
+        small.className = "note";
+        small.textContent = sub;
+        td.append(small);
+      }
+      return td;
+    }
+    function num(text) {
+      const td = document.createElement("td");
+      td.className = "num";
+      td.textContent = text;
+      return td;
+    }
+    function numberCell(ticket) {
+      const td = document.createElement("td");
+      const hits = new Set(ticket.winning ? ticket.winning.numbers : []);
+      const nums = ticket.numbers.map((n) => {
+        let cls = "";
+        if (hits.has(n)) cls = ' class="is-hit"';
+        else if (ticket.winning && ticket.bonus_hit && n === ticket.winning.bonus) cls = ' class="is-bonus"';
+        return "<b" + cls + ">" + pad(n) + "</b>";
+      }).join("");
+      td.innerHTML = "<span class='balls-view'>" + nums + "</span>";
+      if (ticket.note) {
+        const small = document.createElement("div");
+        small.className = "note";
+        small.textContent = ticket.note;
+        td.append(small);
+      }
+      return td;
+    }
+    function resultCell(ticket) {
+      const td = document.createElement("td");
+      let text = ticket.status;
+      if (ticket.matched !== null && ticket.matched !== undefined && ticket.status !== "未抽せん") {
+        text += " / 本" + ticket.matched;
+        if (ticket.bonus_hit) text += "+B";
+      }
+      td.textContent = text;
+      if (ticket.winning) {
+        const small = document.createElement("div");
+        small.className = "note";
+        small.textContent = ticket.winning.numbers.map(pad).join(" ") + " +" + pad(ticket.winning.bonus);
+        td.append(small);
+      }
+      return td;
+    }
+
+    async function loadAnalysis() {
+      const years = document.getElementById("analysisYears").value;
+      document.getElementById("analysisMeta").textContent = "集計中…";
+      setStatus("run", "集計中", "直近" + years + "年");
+      try {
+        const data = await api("/api/analysis?years=" + years);
+        state.analysisLoaded = true;
+        const meta = data.meta || {};
+        document.getElementById("analysisMeta").textContent =
+          `第${meta.start_draw}〜${meta.end_draw} / ${meta.draw_count}回`;
+        const freq = data.frequency || [];
+        const maxCount = Math.max(...freq.map((row) => row.count), 1);
+        document.getElementById("trendCards").innerHTML = [
+          cardHtml("開催", meta.draw_count.toLocaleString("ja-JP"), "回"),
+          cardHtml("最多", freq[0] ? pad(freq[0].number) : "—", freq[0] ? freq[0].count + "回" : ""),
+          cardHtml("最少", freq.length ? pad(freq[freq.length - 1].number) : "—", freq.length ? freq[freq.length - 1].count + "回" : ""),
+          cardHtml("最多対", data.pairs?.[0] ? pad(data.pairs[0].number_a) + "-" + pad(data.pairs[0].number_b) : "—", data.pairs?.[0] ? data.pairs[0].count + "回" : ""),
+        ].join("");
+        document.getElementById("freqRows").innerHTML = freq.map((row, i) => {
+          const width = Math.round((row.count / maxCount) * 100);
+          return `<tr>
+            <td class="rn">${i + 1}</td>
+            <td>${ballHtml([row.number], null)}</td>
+            <td class="num">${row.count.toLocaleString("ja-JP")}</td>
+            <td class="num">${Number(row.probability).toFixed(3)}</td>
+            <td class="num">${row.draws_since_last}</td>
+            <td><div class="barfill"><i style="width:${width}%"></i></div></td>
+          </tr>`;
+        }).join("");
+        document.getElementById("pairRows").innerHTML = (data.pairs || []).slice(0, 15).map((row, i) =>
+          `<tr><td class="rn">${i + 1}</td><td class="money">${pad(row.number_a)}-${pad(row.number_b)}</td><td class="num">${row.count}</td><td class="num">${Number(row.probability).toFixed(3)}</td></tr>`
+        ).join("");
+        document.getElementById("tripleRows").innerHTML = (data.triples || []).slice(0, 10).map((row, i) =>
+          `<tr><td class="rn">${i + 1}</td><td class="money">${pad(row.number_a)}-${pad(row.number_b)}-${pad(row.number_c)}</td><td class="num">${row.count}</td><td class="num">${Number(row.probability).toFixed(3)}</td></tr>`
+        ).join("");
+        document.getElementById("oddEvenRows").innerHTML = (data.odd_even || []).map((row) =>
+          `<tr><td>偶${row.even_count}/奇${row.odd_count}</td><td class="num">${row.draws}</td><td class="num">${Number(row.rate).toFixed(3)}</td></tr>`
+        ).join("");
+        const sums = data.sums || [];
+        if (sums.length) {
+          const expanded = [];
+          sums.forEach((row) => { for (let i = 0; i < row.draws; i++) expanded.push(row.sum_value); });
+          const avg = expanded.reduce((a, b) => a + b, 0) / expanded.length;
+          const sorted = [...expanded].sort((a, b) => a - b);
+          const mid = sorted[Math.floor(sorted.length / 2)];
+          const mode = sums.slice().sort((a, b) => b.draws - a.draws)[0];
+          document.getElementById("sumSummary").textContent =
+            `平均 ${avg.toFixed(2)} / 中央 ${mid} / 最小 ${sorted[0]} / 最大 ${sorted[sorted.length - 1]} / 最頻 ${mode.sum_value}（${mode.draws}）`;
+        } else {
+          document.getElementById("sumSummary").textContent = "データなし";
+        }
+        setStatus("ok", "集計完了", meta.draw_count + "回");
+      } catch (err) {
+        document.getElementById("analysisMeta").textContent = err.message;
+        setStatus("err", "集計失敗", err.message);
+      }
+    }
+    function cardHtml(label, value, note) {
+      return `<div><span>${label}</span><strong>${value}</strong><em>${note || ""}</em></div>`;
+    }
+
+    async function loadHistory() {
+      setStatus("run", "全件読込中", "履歴");
+      const data = await api("/api/history?limit=0");
+      state.historyLoaded = true;
+      state.historyTotal = data.total || 0;
+      const count = (data.items || []).length;
+      document.getElementById("historyMeta").textContent =
+        data.total
+          ? `第${data.oldest_draw}〜${data.newest_draw} / 全${count.toLocaleString("ja-JP")}回`
+          : "当せんデータなし";
+      const body = document.getElementById("historyRows");
+      document.getElementById("historyEmpty").hidden = count > 0;
+      body.innerHTML = (data.items || []).map((item, index) => {
+        const prize1 = item.prizes?.["1"];
+        return `<tr>
+          <td class="rn">${index + 1}</td>
+          <td>第${item.draw_no}</td>
+          <td class="money">${item.draw_date}</td>
+          <td>${ballHtml(item.numbers, null)}</td>
+          <td>${ballHtml([], item.bonus)}</td>
+          <td class="num">${prize1 == null ? "なし" : yen(prize1)}</td>
+          <td class="num">${item.sales_amount == null ? "—" : yen(item.sales_amount)}</td>
+          <td class="num">${item.carryover_amount == null ? "—" : yen(item.carryover_amount)}</td>
+        </tr>`;
+      }).join("");
+      setStatus("ok", "全件表示", `${count.toLocaleString("ja-JP")}回`);
+    }
+
+    function editTicket(ticket) {
+      state.editing = ticket.id;
+      state.sub = "form";
+      showTab("ledger");
+      document.getElementById("formTitle").textContent = "修正";
+      document.getElementById("save").innerHTML = '更新する <span class="key">Ctrl S</span>';
+      document.getElementById("drawNo").value = ticket.draw_no;
+      document.getElementById("purchasedOn").value = ticket.purchased_on;
+      ticket.numbers.forEach((n, i) => { balls[i].value = n; });
+      document.getElementById("ticketCountInput").value = ticket.ticket_count;
+      document.getElementById("unitPrice").value = ticket.unit_price;
+      document.getElementById("prizeOverride").value = ticket.prize_override ?? "";
+      document.getElementById("note").value = ticket.note;
+      costNow();
+      loadDrawHint();
+      refresh();
+    }
+    function clearForm() {
+      state.editing = null;
+      document.getElementById("formTitle").textContent = "手入力";
+      document.getElementById("save").innerHTML = '記録する <span class="key">Ctrl S</span>';
+      document.getElementById("form").reset();
+      document.getElementById("purchasedOn").value = today();
+      document.getElementById("ticketCountInput").value = 1;
+      document.getElementById("unitPrice").value = 200;
+      if (state.draws.length) document.getElementById("drawNo").value = state.draws[0].draw_no;
+      costNow();
+      setError("");
+      loadDrawHint();
+    }
+    async function removeTicket(ticket) {
+      if (!confirm("第" + ticket.draw_no + "回を消す？")) return;
+      await api("/api/tickets/" + ticket.id, { method: "DELETE" });
+      if (state.editing === ticket.id) clearForm();
+      await refresh();
+      setStatus("ok", "削除した", "第" + ticket.draw_no + "回");
+    }
+
+    document.querySelectorAll(".rail button").forEach((button) => {
+      button.addEventListener("click", () => showTab(button.dataset.tab));
+    });
+    document.getElementById("reloadAnalysis").addEventListener("click", () => {
+      state.analysisLoaded = false;
+      loadAnalysis();
+    });
+    document.getElementById("analysisYears").addEventListener("change", () => {
+      state.analysisLoaded = false;
+      loadAnalysis();
+    });
+    document.getElementById("historyReload").addEventListener("click", () => {
+      state.historyLoaded = false;
+      loadHistory();
+    });
+    document.getElementById("numberPad").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-n]");
+      if (!button || state.tab !== "history" || state.sub !== "search") return;
+      toggleSearchNumber(Number(button.dataset.n));
+    });
+    document.getElementById("searchPop").addEventListener("click", () => backspaceSearch());
+    document.getElementById("searchRun").addEventListener("click", () => runNumberSearch());
+    document.getElementById("searchClear").addEventListener("click", () => clearSearch());
+    document.getElementById("searchPrev").addEventListener("click", () => {
+      state.searchOffset = Math.max(0, state.searchOffset - state.searchLimit);
+      runNumberSearch();
+    });
+    document.getElementById("searchNext").addEventListener("click", () => {
+      state.searchOffset += state.searchLimit;
+      runNumberSearch();
+    });
+    document.getElementById("searchFromTicket").addEventListener("change", (event) => {
+      const id = Number(event.target.value);
+      if (!id) return;
+      const ticket = state.tickets.find((item) => item.id === id);
+      if (!ticket) return;
+      state.searchNumbers = [...ticket.numbers];
+      state.searchOffset = 0;
+      renderSearchSlots();
+      runNumberSearch();
+    });
+    document.getElementById("purchasedOn").value = today();
+    document.getElementById("ticketCountInput").addEventListener("input", costNow);
+    document.getElementById("unitPrice").addEventListener("input", costNow);
+    document.getElementById("drawNo").addEventListener("change", loadDrawHint);
+    balls[0].addEventListener("paste", (event) => {
+      const text = event.clipboardData.getData("text");
+      const nums = text.match(/\d+/g) || [];
+      if (nums.length < 6) return;
+      event.preventDefault();
+      balls.forEach((input, index) => { input.value = nums[index]; });
+    });
+    document.getElementById("clear").addEventListener("click", () => { clearForm(); refresh(); });
+    document.getElementById("importOfficial").addEventListener("click", async () => {
+      const button = document.getElementById("importOfficial");
+      button.disabled = true;
+      setImportStatus("run", "取込中… 公式でログイン");
+      setStatus("run", "取込中", "Chromeを操作");
+      try {
+        await api("/api/import-official", { method: "POST" });
+      } catch (err) {
+        setImportStatus("err", err.message);
+        setStatus("err", "取込失敗", "通信または起動を確認");
+        button.disabled = false;
+        return;
+      }
+      const timer = setInterval(async () => {
+        const current = await api("/api/import-status");
+        const msg = current.message || "";
+        if (current.status === "error") {
+          setImportStatus("err", msg || "失敗");
+          setStatus("err", "取込失敗", msg || "公式サイト側を確認");
+        } else if (current.status === "done") {
+          setImportStatus("ok", msg || "完了");
+          setStatus("ok", "取込完了", msg || "");
+        } else {
+          setImportStatus("run", msg || "取込中…");
+          setStatus("run", "取込中", msg || "");
+        }
+        if (current.status === "done" || current.status === "error") {
+          clearInterval(timer);
+          button.disabled = false;
+          if (current.status === "done") await refresh();
+        }
+      }, 1500);
+    });
+    document.getElementById("quit").addEventListener("click", async () => {
+      if (!confirm("終了する？")) return;
+      await api("/api/shutdown", { method: "POST" });
+      document.body.innerHTML = "<p style='padding:24px;font:16px sans-serif'>終了した。窓を閉じてよい。</p>";
+    });
+    document.getElementById("form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setError("");
+      const payload = {
+        draw_no: document.getElementById("drawNo").value,
+        purchased_on: document.getElementById("purchasedOn").value,
+        numbers: balls.map((input) => input.value),
+        ticket_count: document.getElementById("ticketCountInput").value,
+        unit_price: document.getElementById("unitPrice").value,
+        prize_override: document.getElementById("prizeOverride").value,
+        note: document.getElementById("note").value,
+      };
+      try {
+        if (state.editing) {
+          await api("/api/tickets/" + state.editing, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await api("/api/tickets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        }
+        clearForm();
+        state.sub = "main";
+        syncChrome();
+        await refresh();
+        setStatus("ok", "記録した", "購入一覧を更新");
+      } catch (err) {
+        setError(err.message + "　入力を直して再実行。");
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const inSearch = state.tab === "history" && state.sub === "search";
+      const typingField = event.target.matches("input, textarea, select");
+      if (event.key === "F2") {
+        event.preventDefault();
+        if (state.tab === "ledger") document.getElementById("importOfficial").click();
+      }
+      if (event.key === "F5" && state.tab === "trends") {
+        event.preventDefault();
+        document.getElementById("reloadAnalysis").click();
+      }
+      if (event.key === "F5" && state.tab === "history" && state.sub === "main") {
+        event.preventDefault();
+        document.getElementById("historyReload").click();
+      }
+      if (event.key === "Escape" && state.tab === "ledger" && state.sub === "form") {
+        event.preventDefault();
+        document.getElementById("clear").click();
+      }
+      if (event.key === "Escape" && inSearch) {
+        event.preventDefault();
+        clearSearch();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && state.tab === "ledger" && state.sub === "form") {
+        event.preventDefault();
+        document.getElementById("save").click();
+      }
+      if (inSearch && !typingField) {
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          backspaceSearch();
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          runNumberSearch();
+        }
+      }
+    });
+
+    syncChrome();
+    refresh().then(() => {
+      if (!document.getElementById("drawNo").value && state.draws.length) {
+        document.getElementById("drawNo").value = state.draws[0].draw_no;
+        loadDrawHint();
+      }
+      setStatus("ok", "待機", "準備完了");
+    }).catch((err) => {
+      setError(err.message + "　アプリを再起動。");
+      setStatus("err", "読込失敗", err.message);
+    });
+  </script>
+</body>
+</html>

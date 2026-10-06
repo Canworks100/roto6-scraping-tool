@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly collect timer for %i
+
+[Timer]
+# 抽せん日夜を想定（毎日 22:30）。必要なら OnCalendar を調整
+OnCalendar=*-*-* 22:30:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

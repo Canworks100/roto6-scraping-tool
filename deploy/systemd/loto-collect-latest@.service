@@ -1,0 +1,15 @@
+[Unit]
+Description=Loto latest-draw collect for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loto
+Group=loto
+WorkingDirectory=/opt/loto
+Environment=PYTHONPATH=/opt/loto/src
+ExecStart=/opt/loto/.venv/bin/python -m loto6 collect --game %i --latest
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

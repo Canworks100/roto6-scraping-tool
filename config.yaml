@@ -1,0 +1,104 @@
+# ロト収集・公開サイトの設定。
+
+site:
+  base_url: "https://www.mizuhobank.co.jp"
+  backnumber_index: "/takarakuji/check/loto/backnumber/index.html"
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+rate_limit:
+  min_interval_sec: 1.2
+  max_interval_sec: 2.0
+  timeout_sec: 30
+  max_retries: 3
+  backoff_sec: 5.0
+  max_consecutive_failures: 20
+
+# 抽せん直後の番号案内（金額はみずほCSVが出てから足す）
+primary:
+  base_url: "https://takarakuji.rakuten.co.jp"
+  lastresults:
+    loto6: "/backnumber/loto6/lastresults/"
+    loto7: "/backnumber/loto7/lastresults/"
+    miniloto: "/backnumber/mini/lastresults/"
+
+# 後方互換（デスクトップ台帳・旧CLI）
+lottery:
+  min_number: 1
+  max_number: 43
+  main_count: 6
+  years: 10
+
+games:
+  loto6:
+    label: "ロト6"
+    min_number: 1
+    max_number: 43
+    main_count: 6
+    bonus_count: 1
+    prize_grades: 5
+    current_page: "/takarakuji/check/loto/loto6/index.html"
+    summary_csv: "/retail/takarakuji/loto/loto6/csv/loto6.csv"
+    draw_csv: "/retail/takarakuji/loto/loto6/csv/A102{draw:04d}.CSV"
+    detail_page: "/takarakuji/check/loto/backnumber/detail.html?fromto={start}_{end}&type=loto6"
+    static_backnumber: "/takarakuji/check/loto/backnumber/loto6{start:04d}.html"
+    static_html_last: 460
+    ready: true
+  loto7:
+    label: "ロト7"
+    min_number: 1
+    max_number: 37
+    main_count: 7
+    bonus_count: 2
+    prize_grades: 6
+    current_page: "/takarakuji/check/loto/loto7/index.html"
+    summary_csv: "/retail/takarakuji/loto/loto7/csv/loto7.csv"
+    draw_csv: "/retail/takarakuji/loto/loto7/csv/A103{draw:04d}.CSV"
+    detail_page: "/takarakuji/check/loto/backnumber/detail.html?fromto={start}_{end}&type=loto7"
+    # 早期回は静的HTML（早期はCSVなしの想定。実測で調整）
+    static_backnumber: "/takarakuji/check/loto/backnumber/loto7{start:04d}.html"
+    static_html_last: 0
+    ready: true
+  miniloto:
+    label: "ミニロト"
+    min_number: 1
+    max_number: 31
+    main_count: 5
+    bonus_count: 1
+    prize_grades: 4
+    current_page: "/takarakuji/check/loto/miniloto/index.html"
+    summary_csv: "/retail/takarakuji/loto/miniloto/csv/miniloto.csv"
+    draw_csv: "/retail/takarakuji/loto/miniloto/csv/A101{draw:04d}.CSV"
+    detail_page: "/takarakuji/check/loto/backnumber/detail.html?fromto={start}_{end}&type=miniloto"
+    static_backnumber: "/takarakuji/check/loto/backnumber/loto{start:04d}.html"
+    # CSV は第521回から。第1〜520回は静的HTML
+    static_html_last: 520
+    ready: true
+
+selectors:
+  draw_table: "table.section__table"
+  draw_number: ".js-lottery-issue-pc"
+  draw_date: ".js-lottery-date-pc"
+  main_number: ".js-lottery-number-pc"
+  bonus_number: ".js-lottery-bonus-pc"
+  prize_row: "tr.js-lottery-prize-pc"
+  sales: ".js-lottery-sum-pc"
+  carryover: ".js-lottery-over-pc"
+  archive_anchor: "a[href]"
+
+storage:
+  # 公開サイト・マルチゲーム用
+  sqlite_path: "data/loto.sqlite"
+  # デスクトップ台帳は従来DBを継続利用
+  legacy_sqlite_path: "data/loto6.sqlite"
+  csv_path: "data/loto6_draws.csv"
+  raw_dir: "data/raw"
+
+analysis:
+  output_dir: "output"
+  top_pairs: 30
+  top_triples: 20
+
+public:
+  cors_origins: []
+  search_rate_per_minute: 60
+  generate_rate_per_minute: 20
