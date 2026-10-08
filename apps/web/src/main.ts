@@ -119,10 +119,6 @@ function formatCountOrMissing(n: number | null | undefined): string {
   return formatCount(n);
 }
 
-function sourceCredit(): string {
-  return `<p class="source-credit">出典：楽天×宝くじ</p>`;
-}
-
 function formatYenOku(n: number): string {
   const oku = Math.floor(n / 100_000_000);
   const man = Math.floor((n % 100_000_000) / 10_000);
@@ -635,7 +631,6 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
         <li>販売実績 ${formatYen(item.sales_amount)}</li>
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
       </ul>
-      ${sourceCredit()}
       <p class="flash-actions">
         <a class="btn btn-primary" href="/${game}/flash/${item.draw_no}" data-link>この回の速報</a>
         <a class="btn btn-ghost" href="/${game}/flash" data-link>速報一覧</a>
@@ -780,7 +775,6 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
         <li>販売実績 ${formatYen(item.sales_amount)}</li>
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
       </ul>
-      ${sourceCredit()}
       ${notes ? `<h3 class="post-h">この回の特徴</h3><ul class="post-notes">${notes}</ul>` : ""}
       <p class="flash-actions">
         ${prev}

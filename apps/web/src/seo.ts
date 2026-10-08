@@ -339,23 +339,22 @@ export function setSeo(path: string, opts?: SeoOpts) {
   canonical.setAttribute("href", abs);
 
   const ogType = opts?.ogType || "website";
+  const imageAbs = "https://lottery-analytics.com/og-image.png";
+  const imageAlt = "LOTO アナリティクス";
   ensureMeta("property", "og:title").setAttribute("content", title);
   ensureMeta("property", "og:description").setAttribute("content", description);
   ensureMeta("property", "og:url").setAttribute("content", abs);
   ensureMeta("property", "og:type").setAttribute("content", ogType);
   ensureMeta("property", "og:site_name").setAttribute("content", SITE);
-  const imageAbs = opts?.image ? absoluteUrl(opts.image) : "";
-  if (imageAbs) {
-    ensureMeta("property", "og:image").setAttribute("content", imageAbs);
-    ensureMeta("name", "twitter:image").setAttribute("content", imageAbs);
-  }
+  ensureMeta("property", "og:image").setAttribute("content", imageAbs);
+  ensureMeta("property", "og:image:width").setAttribute("content", "1200");
+  ensureMeta("property", "og:image:height").setAttribute("content", "630");
+  ensureMeta("property", "og:image:alt").setAttribute("content", imageAlt);
   if (opts?.publishedTime) {
     ensureMeta("property", "article:published_time").setAttribute("content", opts.publishedTime);
   }
-  ensureMeta("name", "twitter:card").setAttribute(
-    "content",
-    imageAbs ? "summary_large_image" : "summary",
-  );
+  ensureMeta("name", "twitter:card").setAttribute("content", "summary_large_image");
+  ensureMeta("name", "twitter:image").setAttribute("content", imageAbs);
   ensureMeta("name", "twitter:title").setAttribute("content", title);
   ensureMeta("name", "twitter:description").setAttribute("content", description);
 }

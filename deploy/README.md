@@ -109,7 +109,7 @@ export VITE_SITE_ORIGIN=https://lottery-analytics.com
 
 `config.yaml` の `collector.source`:
 
-- `rakuten`（既定）… 楽天×宝くじ。販売実績は null（画面は「未取得」）。出典表示あり
+- `rakuten`（既定）… 楽天×宝くじ。販売実績は null（画面は「未取得」）
 - `mizuho` … レガシー（BrowserClient）。VPS では 403 のため通常使わない
 
 ## バックアップ・監視
