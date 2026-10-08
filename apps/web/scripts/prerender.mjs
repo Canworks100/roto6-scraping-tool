@@ -27,7 +27,7 @@ const VIEWS = [
     path: "",
     title: (l) => `${l}｜${SITE}`,
     desc: (l) =>
-      `${l}の最新当選番号・次回予想・出現回数・結果一覧への入口。必要なページへここから辿れます。`,
+      `${l}の当選番号や予想、出現の様子へ進む入口です。必要なページへここから辿れます。`,
   },
   {
     view: "latest",
@@ -48,21 +48,21 @@ const VIEWS = [
     path: "/history",
     title: (l) => `${l} 当選番号一覧（過去結果）｜${SITE}`,
     desc: (l) =>
-      `${l}の過去の当選番号と当せん金額を、新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+      `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   },
   {
     view: "freq",
     path: "/freq",
     title: (l) => `${l} よく出る数字・出現回数｜${SITE}`,
     desc: (l) =>
-      `${l}のよく出る数字・出にくい数字を出現回数で一覧。最終出現や空きも見えるので、数字選びの参考になります。`,
+      `${l}のよく出る数字と出にくい数字を出現回数で一覧。最終出現や空きも見えるので、数字選びの参考になります。`,
   },
   {
     view: "pairs",
     path: "/pairs",
     title: (l) => `${l} よく出る組み合わせ｜${SITE}`,
     desc: (l) =>
-      `${l}で同じ回に一緒に出やすい2個・3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
+      `${l}で同じ回に一緒に出やすい2個や3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
   },
   {
     view: "shape",
@@ -83,7 +83,7 @@ const VIEWS = [
     path: "/follow",
     title: (l) => `${l} 前回の当選番号を含む回数｜${SITE}`,
     desc: (l) =>
-      `${l}で、前回と同じ数字がまた出た回数と、2連続・3連続を数字ごとにまとめています。`,
+      `${l}で、前回と同じ数字がまた出た回数と、2連続や3連続を数字ごとにまとめています。`,
   },
   {
     view: "ranks",
@@ -104,7 +104,7 @@ const VIEWS = [
     path: "/combo",
     title: (l) => `${l} 組合診断｜1口の所見｜${SITE}`,
     desc: (l) =>
-      `${l}の1口について、奇数偶数・合計などの所見と、過去に照合した一致の様子を表示します。`,
+      `${l}の1口について、奇数偶数や合計などの所見と、過去に照合した一致の様子を表示します。`,
   },
   {
     view: "generate",
@@ -514,7 +514,7 @@ function homeBody() {
   return `<section class="home-fv">
     <header class="hub-head">
       <h1 class="hub-title">LOTO アナリティクス</h1>
-      <p class="hub-lead">ロト6・ロト7・ミニロトの当選番号と出現回数</p>
+      <p class="hub-lead">ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！</p>
     </header>
     <div class="home-kpi">${cards}</div>
   </section>
@@ -526,8 +526,8 @@ function homeBody() {
 
 writePage(
   "",
-  `${SITE}｜ロト6・ロト7・ミニロトの当選番号と出現回数`,
-  "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧への入口。会員登録なしで、種目ごとのページから調べられます。",
+  `${SITE}｜ロト6・ロト7・ミニロト｜高額当選を狙おう！`,
+  "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！",
   homeBody(),
 );
 urls.push("/");
@@ -620,7 +620,7 @@ for (const game of GAMES) {
         <p>気になる数字を選ぶと、本数字に出た開催が一覧できます。登録数字はこの端末に保存します。</p></div>`;
     } else if (view.view === "combo") {
       body = `<div class="box"><h1>${game.label} 組合診断</h1>
-        <p>1口の奇数偶数・合計などの所見と、過去開催との照合結果を表示します。</p></div>`;
+        <p>1口の奇数偶数や合計などの所見と、過去開催との照合結果を表示します。</p></div>`;
     } else {
       const h1 = view.title(game.label).split("｜")[0];
       body = `<div class="box"><h1>${h1}</h1><p>${esc(view.desc(game.label))}</p>
@@ -647,15 +647,24 @@ for (const game of GAMES) {
     urls.push(path);
   }
 
+  const guideDesc = {
+    "how-to-buy": (l) =>
+      `${l}の買い方の案内です。売り場での購入のほか、本サイトでできることとできないことをまとめています。`,
+    odds: (l) =>
+      `${l}の当せん確率について。抽せんは回ごとに独立で、過去の出目は次の確率を変えません。`,
+    faq: (l) =>
+      `${l}についてよくある質問。最新結果の見方や予想の扱い、公式結果との違いをまとめています。`,
+  };
   for (const g of GUIDE_SLUGS) {
     const path = `/${game.id}/guide/${g.slug}`;
     const body = `<article class="legal"><h1>${game.label} ${g.title}</h1>
       <p>${game.label}の${g.title}についての案内です。正式な購入方法・確率は宝くじ公式の案内をご確認ください。</p>
       <p><a href="/${game.id}">${game.label}トップ</a>　<a href="/disclaimer">免責事項</a></p></article>`;
+    const descFn = guideDesc[g.slug];
     writePage(
       path.slice(1),
       `${game.label} ${g.title}｜${SITE}`,
-      `${game.label}の${g.title}についてまとめています。`,
+      descFn ? descFn(game.label) : `${game.label}のガイドです。`,
       body,
     );
     urls.push(path);
@@ -744,7 +753,7 @@ for (const game of GAMES) {
 writePage(
   "404",
   `ページが見つかりません｜${SITE}`,
-  "お探しのページは見つかりませんでした。",
+  "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。",
   `<div class="box"><h1>ページが見つかりません</h1><p><a href="/">トップへ</a></p></div>`,
 );
 

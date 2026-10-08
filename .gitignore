@@ -13,5 +13,13 @@ data/*
 .DS_Store
 node_modules/
 apps/web/dist/
+.env.local
+.env.*.local
+apps/web/.env.local
+apps/web/.env.*.local
 .cursor/
 output/
+
+# 本番デプロイのローカル退避
+Backup/
+

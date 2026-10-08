@@ -1455,6 +1455,12 @@ table.data td.nums {
   background: var(--bg);
 }
 
+.source-credit {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .flash-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1593,6 +1599,100 @@ table.data td.nums {
   padding-left: 1.2em;
   font-size: 15px;
   line-height: 1.7;
+}
+
+#aff-slot:empty {
+  display: none;
+}
+
+.aff-footer {
+  margin: 0 0 16px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--ink);
+  background: var(--zebra);
+  color: var(--ink);
+}
+
+.aff-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.aff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.aff-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.aff-card:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.aff-thumb {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border: 1px solid var(--ink);
+  background:
+    linear-gradient(135deg, var(--accent) 0 50%, transparent 50%),
+    var(--surface);
+}
+
+.aff-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aff-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.aff-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.aff-price {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.aff-cta {
+  display: inline-block;
+  align-self: start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .disclaimer {

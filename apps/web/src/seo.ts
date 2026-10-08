@@ -11,7 +11,10 @@ const LABELS: Record<string, string> = {
  * 文末の「〜ます。〜ます。」連打を避け、体言止め・名詞句でテンポを出す。
  */
 const HOME_DESC =
-  "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧への入口。会員登録なしで、種目ごとのページから調べられます。";
+  "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！";
+
+/** トップの title 用（description に合わせた短い一句） */
+const HOME_TITLE_SUFFIX = "ロト6・ロト7・ミニロト｜高額当選を狙おう！";
 
 const LEGAL_DESC: Record<string, string> = {
   about:
@@ -24,6 +27,28 @@ const LEGAL_DESC: Record<string, string> = {
     "本サイトのご利用条件。掲載情報の扱いと、サービス内容の変更について定めています。",
   contact:
     "お問い合わせ窓口なし。当せん結果の確認は、公式の案内をご利用ください。",
+};
+
+const NOT_FOUND_TITLE = `ページが見つかりません｜${SITE}`;
+const NOT_FOUND_DESC =
+  "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。";
+
+const GUIDE_META: Record<string, { title: string; desc: (label: string) => string }> = {
+  "how-to-buy": {
+    title: "買い方",
+    desc: (l) =>
+      `${l}の買い方の案内です。売り場での購入のほか、本サイトでできることとできないことをまとめています。`,
+  },
+  odds: {
+    title: "確率",
+    desc: (l) =>
+      `${l}の当せん確率について。抽せんは回ごとに独立で、過去の出目は次の確率を変えません。`,
+  },
+  faq: {
+    title: "FAQ",
+    desc: (l) =>
+      `${l}についてよくある質問。最新結果の見方や予想の扱い、公式結果との違いをまとめています。`,
+  },
 };
 
 type GameDescKey =
@@ -43,27 +68,27 @@ type GameDescKey =
 
 const GAME_DESC: Record<GameDescKey, (label: string) => string> = {
   hub: (l) =>
-    `${l}の最新当選番号・次回予想・出現回数・結果一覧への入口。必要なページへここから辿れます。`,
+    `${l}の当選番号や予想、出現の様子へ進む入口です。必要なページへここから辿れます。`,
   latest: (l) =>
     `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
   flash: (l) =>
     `${l}の当選番号と当せん金額を回号ごとに掲載。前後の回へそのまま移れるので、さかのぼりやすい構成です。`,
   history: (l) =>
-    `${l}の過去の当選番号・当せん金額・キャリーオーバーを、新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+    `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   search: (l) =>
     `${l}で気になる数字を選ぶと、本数字に出た回が一覧に。お気に入りがいつ出たか、すぐ追えます。`,
   combo: (l) =>
-    `${l}の1口について、奇数偶数・合計などの所見と、過去に照合した一致の様子を表示します。`,
+    `${l}の1口について、奇数偶数や合計などの所見と、過去に照合した一致の様子を表示します。`,
   freq: (l) =>
-    `${l}のよく出る数字・出にくい数字を出現回数で一覧。最終出現や空きも見えるので、数字選びの参考になります。`,
+    `${l}のよく出る数字と出にくい数字を出現回数で一覧。最終出現や空きも見えるので、数字選びの参考になります。`,
   pairs: (l) =>
-    `${l}で同じ回に一緒に出やすい2個・3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
+    `${l}で同じ回に一緒に出やすい2個や3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
   shape: (l) =>
     `${l}の奇数偶数や合計、連番など、本数字の形を開催回数で集計。自分の口の偏りを確認できます。`,
   grid: (l) =>
     `${l}の直近開催を出目表で縦に並べ、数字の並びや空きを表のまま追いやすくしました。`,
   follow: (l) =>
-    `${l}で、前回と同じ数字がまた出た回数と、2連続・3連続を数字ごとにまとめています。`,
+    `${l}で、前回と同じ数字がまた出た回数と、2連続や3連続を数字ごとにまとめています。`,
   ranks: (l) =>
     `${l}の1等から3等まで、当せん金額の高い回と低い回をランキング表示。金額の振れ幅を、ひと目で把握できます。`,
   generate: (l) =>
@@ -74,7 +99,7 @@ export const PAGE_LEAD: Record<string, string> = {
   home: HOME_DESC,
   latest: "最新の当選番号と当せん金額、次回予想を確認できます。",
   flash: "回号ごとの当選番号と当せん金額を見られます。",
-  history: "過去の当選番号・当せん金額・キャリーオーバーを、新しい回から順に探せます。",
+  history: "過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に探せます。",
   search: "気になる数字が出た回を、まとめて調べられます。",
   trends: "数字ごとの出現回数と、最後に出た回を一覧できます。",
   generate: "出現回数をもとに、次回の組み合わせを作れます。",
@@ -189,15 +214,18 @@ export type SeoOpts = {
   ogType?: "website" | "article";
   image?: string;
   publishedTime?: string;
+  /** 指定時はパス解決より優先（404 など） */
+  title?: string;
+  description?: string;
 };
 
 export function setSeo(path: string, opts?: SeoOpts) {
   const parts = path.replace(/^\//, "").split("/").filter(Boolean);
-  let title = `${SITE}｜ロト6・ロト7・ミニロトの当選番号と出現回数`;
+  let title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
   let description = HOME_DESC;
 
   if (parts.length === 0) {
-    title = `${SITE}｜ロト6・ロト7・ミニロトの当選番号と出現回数`;
+    title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
     description = HOME_DESC;
   } else if (parts[0] === "about") {
     title = `このサイトについて｜${SITE}`;
@@ -214,6 +242,9 @@ export function setSeo(path: string, opts?: SeoOpts) {
   } else if (parts[0] === "contact") {
     title = `お問い合わせ｜${SITE}`;
     description = LEGAL_DESC.contact;
+  } else if (parts[0] === "404") {
+    title = NOT_FOUND_TITLE;
+    description = NOT_FOUND_DESC;
   } else {
     const game = parts[0];
     const label = LABELS[game] || game;
@@ -271,19 +302,22 @@ export function setSeo(path: string, opts?: SeoOpts) {
       description = gameDesc(label, "history");
     } else if (view === "guide") {
       const slug = parts[2] || "";
-      const guideTitles: Record<string, string> = {
-        "how-to-buy": "買い方",
-        odds: "確率",
-        faq: "FAQ",
-      };
-      const gLabel = guideTitles[slug] || "ガイド";
-      title = `${label} ${gLabel}｜${SITE}`;
-      description = `${label}の${gLabel}についてまとめています。`;
+      const meta = GUIDE_META[slug];
+      if (meta) {
+        title = `${label} ${meta.title}｜${SITE}`;
+        description = meta.desc(label);
+      } else {
+        title = `${label} ガイド｜${SITE}`;
+        description = `${label}の買い方・確率・よくある質問への案内です。`;
+      }
     } else {
       title = `${label}｜${SITE}`;
       description = gameDesc(label, "hub");
     }
   }
+
+  if (opts?.title) title = opts.title;
+  if (opts?.description) description = opts.description;
 
   const cleanPath = path.split("?")[0] || "/";
   const abs = absoluteUrl(cleanPath);

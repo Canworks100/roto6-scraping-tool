@@ -1,0 +1,11 @@
+[Unit]
+Description=Loto6 latest collect on draw nights (Mon/Thu)
+
+[Timer]
+Unit=loto-collect-latest@loto6.service
+OnCalendar=Mon,Thu *-*-* 21:15:00
+Persistent=true
+RandomizedDelaySec=3m
+
+[Install]
+WantedBy=timers.target

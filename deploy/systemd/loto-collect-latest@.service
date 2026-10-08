@@ -1,7 +1,8 @@
 [Unit]
-Description=Loto latest-draw collect for %i
+Description=Loto latest-draw collect for %i (Rakuten)
 After=network-online.target
 Wants=network-online.target
+OnFailure=loto-collect-alert@%i.service
 
 [Service]
 Type=oneshot
@@ -9,6 +10,7 @@ User=loto
 Group=loto
 WorkingDirectory=/opt/loto
 Environment=PYTHONPATH=/opt/loto/src
+EnvironmentFile=-/etc/loto/alert.env
 ExecStart=/opt/loto/.venv/bin/python -m loto6 collect --game %i --latest
 Nice=10
 NoNewPrivileges=true

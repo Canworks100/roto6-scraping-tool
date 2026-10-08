@@ -9,12 +9,14 @@ import {
   flashNewsHeadline,
   flashNewsJsonLd,
   gameLabel,
+  PAGE_LEAD,
   setJsonLd,
   setSeo,
 } from "./seo";
 import { isLegalPage, legalHtml } from "./legal";
 import { guideHtml, isGuideSlug } from "./guides";
 import { loadFavorites, saveFavorites } from "./favorites";
+import { affiliateFooter, hydrateAffiliate } from "./affiliate";
 
 const root = document.querySelector("#app")!;
 let games: GameInfo[] = [];
@@ -108,8 +110,17 @@ function formatDraw(n: number | null | undefined): string {
 }
 
 function formatYen(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "未取得";
   return `${n.toLocaleString("ja-JP")}円`;
+}
+
+function formatCountOrMissing(n: number | null | undefined): string {
+  if (n == null) return "未取得";
+  return formatCount(n);
+}
+
+function sourceCredit(): string {
+  return `<p class="source-credit">出典：楽天×宝くじ</p>`;
 }
 
 function formatYenOku(n: number): string {
@@ -255,6 +266,7 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
     </header>
     <main class="body">${inner}</main>
     <footer class="footer">
+      ${affiliateFooter()}
       <nav class="footer-nav">
         <a href="/about" data-link>このサイトについて</a>
         <a href="/disclaimer" data-link>免責事項</a>
@@ -268,8 +280,12 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
 }
 
 function renderNotFound(message = "お探しのページは見つかりませんでした。") {
-  setSeo(location.pathname, { noindex: true });
-  document.title = `ページが見つかりません｜LOTO アナリティクス`;
+  setSeo(location.pathname, {
+    noindex: true,
+    title: "ページが見つかりません｜LOTO アナリティクス",
+    description:
+      "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。",
+  });
   setJsonLd(null);
   root.innerHTML = shell(
     `<div class="box"><h1>ページが見つかりません</h1><p class="muted">${esc(message)}</p>
@@ -534,7 +550,7 @@ async function renderHome(seq: number) {
     <section class="home-fv">
       <header class="hub-head">
         <h1 class="hub-title">LOTO アナリティクス</h1>
-        <p class="hub-lead">ロト6・ロト7・ミニロトの当選番号と出現回数</p>
+        <p class="hub-lead">${esc(PAGE_LEAD.home)}</p>
       </header>
       <div class="home-kpi">${cards.join("")}</div>
     </section>
@@ -609,20 +625,17 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
               .map(
                 (p) => `<div>
               <dt>${p.grade}等</dt>
-              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCount(p.count)}</span></dd>
+              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCountOrMissing(p.count)}</span></dd>
             </div>`,
               )
               .join("")}</dl>`
           : ""
       }
-      ${
-        item.sales_amount != null || item.carryover_amount != null
-          ? `<ul class="flash-meta">
-        ${item.sales_amount != null ? `<li>販売実績 ${formatYen(item.sales_amount)}</li>` : ""}
-        ${item.carryover_amount != null ? `<li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>` : ""}
-      </ul>`
-          : ""
-      }
+      <ul class="flash-meta">
+        <li>販売実績 ${formatYen(item.sales_amount)}</li>
+        <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
+      </ul>
+      ${sourceCredit()}
       <p class="flash-actions">
         <a class="btn btn-primary" href="/${game}/flash/${item.draw_no}" data-link>この回の速報</a>
         <a class="btn btn-ghost" href="/${game}/flash" data-link>速報一覧</a>
@@ -756,21 +769,18 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
               .map(
                 (p) => `<div>
               <dt>${p.grade}等</dt>
-              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCount(p.count)}</span></dd>
+              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCountOrMissing(p.count)}</span></dd>
             </div>`,
               )
               .join("")}</dl>`
           : ""
       }
       ${article.carry_text ? `<p class="post-carry">${esc(article.carry_text)}</p>` : ""}
-      ${
-        item.sales_amount != null || item.carryover_amount != null
-          ? `<ul class="flash-meta">
-        ${item.sales_amount != null ? `<li>販売実績 ${formatYen(item.sales_amount)}</li>` : ""}
-        ${item.carryover_amount != null ? `<li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>` : ""}
-      </ul>`
-          : ""
-      }
+      <ul class="flash-meta">
+        <li>販売実績 ${formatYen(item.sales_amount)}</li>
+        <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
+      </ul>
+      ${sourceCredit()}
       ${notes ? `<h3 class="post-h">この回の特徴</h3><ul class="post-notes">${notes}</ul>` : ""}
       <p class="flash-actions">
         ${prev}
@@ -2091,6 +2101,7 @@ function bindLinks() {
       navigate(a.getAttribute("href") || "/");
     });
   });
+  void hydrateAffiliate();
 }
 
 window.addEventListener("popstate", () => void render());
