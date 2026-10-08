@@ -207,6 +207,8 @@ class Store:
                 return True
             if not refresh:
                 return False
+            if _same_official(existing, draw):
+                return False
         columns = COLUMNS
         placeholders = ", ".join("?" for _ in columns)
         values = [row.get(column) for column in columns]
@@ -229,6 +231,22 @@ class Store:
         )
         self.conn.commit()
         return True
+
+    def draws_missing_prizes(self, game: str = "loto6") -> list[sqlite3.Row]:
+        """等級金額がほぼ全て欠けている回（1等なし＋キャリーのみは含めない）。"""
+        return list(
+            self.conn.execute(
+                """
+                SELECT * FROM draws
+                WHERE game=?
+                  AND prize2_amount IS NULL
+                  AND prize3_amount IS NULL
+                  AND prize4_amount IS NULL
+                ORDER BY draw_no ASC
+                """,
+                (game,),
+            )
+        )
 
     def _update_numbers(self, row: dict[str, int | str | None]) -> None:
         self.conn.execute(
@@ -582,6 +600,37 @@ def _same_numbers(existing: sqlite3.Row, draw: Draw) -> bool:
         and (None if bonus2 is None else int(bonus2)) == draw.bonus2
         and str(existing["draw_date"]) == str(draw.draw_date)
     )
+
+
+def _same_official(existing: sqlite3.Row, draw: Draw) -> bool:
+    """番号・等級・キャリーが同じなら True（sales は楽天で常に null のため比較しない）。"""
+    if not _same_numbers(existing, draw):
+        return False
+    row = draw.as_row()
+    for key in (
+        "prize1_count",
+        "prize1_amount",
+        "prize2_count",
+        "prize2_amount",
+        "prize3_count",
+        "prize3_amount",
+        "prize4_count",
+        "prize4_amount",
+        "prize5_count",
+        "prize5_amount",
+        "prize6_count",
+        "prize6_amount",
+        "carryover_amount",
+    ):
+        left = existing[key] if key in existing.keys() else None
+        right = row.get(key)
+        if left is None and right is None:
+            continue
+        if left is None or right is None:
+            return False
+        if int(left) != int(right):
+            return False
+    return True
 
 
 def row_to_draw(row: sqlite3.Row, main_count: int = 6) -> dict:

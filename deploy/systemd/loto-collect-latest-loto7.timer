@@ -3,9 +3,15 @@ Description=Loto7 latest collect on draw nights (Fri)
 
 [Timer]
 Unit=loto-collect-latest@loto7.service
-OnCalendar=Fri *-*-* 21:15:00
+OnCalendar=Fri *-*-* 20:50:00
+OnCalendar=Fri *-*-* 21:05:00
+OnCalendar=Fri *-*-* 21:20:00
+OnCalendar=Fri *-*-* 21:35:00
+OnCalendar=Fri *-*-* 21:55:00
+OnCalendar=Fri *-*-* 22:20:00
+OnCalendar=Fri *-*-* 22:50:00
 Persistent=true
-RandomizedDelaySec=3m
+RandomizedDelaySec=90
 
 [Install]
 WantedBy=timers.target

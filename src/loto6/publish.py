@@ -1,0 +1,87 @@
+"""収集後の静的サイト再ビルドと配信同期。壊れた dist は出さない。"""
+
+from __future__ import annotations
+
+import logging
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger("loto6")
+
+DEFAULT_SITE_ORIGIN = "https://lottery-analytics.com"
+REQUIRED_DIST_FILES = ("index.html", "robots.txt", "sitemap.xml", "news-sitemap.xml")
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def publish_static(
+    *,
+    site_origin: str | None = None,
+    www_dir: str | Path | None = None,
+    web_dir: Path | None = None,
+) -> None:
+    """apps/web を一時ディレクトリへビルドし、検証後に www_dir へ同期する。失敗時は配信を触らない。"""
+    origin = (site_origin or os.environ.get("SITE_ORIGIN") or DEFAULT_SITE_ORIGIN).rstrip("/")
+    web = web_dir or (repo_root() / "apps" / "web")
+    target = Path(www_dir or os.environ.get("LOTO_WWW_DIR") or "/var/www/loto-stg")
+    if not web.is_dir():
+        raise FileNotFoundError(f"web dir not found: {web}")
+    if not (web / "package.json").is_file():
+        raise FileNotFoundError(f"package.json missing: {web}")
+
+    staging = Path(tempfile.mkdtemp(prefix="loto-dist-"))
+    try:
+        env = {
+            **os.environ,
+            "SITE_ORIGIN": origin,
+            "VITE_SITE_ORIGIN": origin,
+            "LOTO_DIST_DIR": str(staging),
+        }
+        logger.info("静的ビルド開始 origin=%s staging=%s", origin, staging)
+        subprocess.run(
+            ["npm", "ci"],
+            cwd=web,
+            env=env,
+            check=True,
+            timeout=600,
+        )
+        subprocess.run(
+            ["npm", "run", "build"],
+            cwd=web,
+            env=env,
+            check=True,
+            timeout=900,
+        )
+        _assert_dist_ok(staging)
+        target.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["rsync", "-a", "--delete", f"{staging}/", f"{target}/"],
+            check=True,
+            timeout=300,
+        )
+        logger.info("静的同期完了 → %s", target)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def _assert_dist_ok(dist: Path) -> None:
+    missing = [name for name in REQUIRED_DIST_FILES if not (dist / name).is_file()]
+    if missing:
+        raise RuntimeError(f"ビルド成果物が不完全です（欠け: {', '.join(missing)}）: {dist}")
+    for name in REQUIRED_DIST_FILES:
+        if (dist / name).stat().st_size < 16:
+            raise RuntimeError(f"ビルド成果物が空です: {dist / name}")
+
+
+def publish_from_config(config: dict[str, Any]) -> None:
+    publish = config.get("publish") or {}
+    publish_static(
+        site_origin=str(publish.get("site_origin") or DEFAULT_SITE_ORIGIN),
+        www_dir=publish.get("www_dir") or os.environ.get("LOTO_WWW_DIR") or "/var/www/loto-stg",
+    )

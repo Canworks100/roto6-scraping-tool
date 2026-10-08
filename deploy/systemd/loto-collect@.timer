@@ -1,11 +1,11 @@
 [Unit]
-Description=Nightly collect timer for %i
+Description=DISABLED mizuho nightly collect for %i — disable/mask on VPS
+# 楽天運用では: systemctl disable --now loto-collect@loto6.timer loto-collect@loto7.timer loto-collect@miniloto.timer
 
 [Timer]
-# 抽せん日夜を想定（毎日 22:30）。必要なら OnCalendar を調整
-OnCalendar=*-*-* 22:30:00
-Persistent=true
-RandomizedDelaySec=10m
+# 誤 enable 時の保険。実害のある収集は service 側で no-op。
+OnCalendar=*-*-* 03:17:00
+Persistent=false
 
 [Install]
 WantedBy=timers.target

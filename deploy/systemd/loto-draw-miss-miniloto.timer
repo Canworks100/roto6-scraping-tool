@@ -1,0 +1,10 @@
+[Unit]
+Description=Miniloto draw-night miss check at 23:00 (Tue)
+
+[Timer]
+Unit=loto-draw-miss@miniloto.service
+OnCalendar=Tue *-*-* 23:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

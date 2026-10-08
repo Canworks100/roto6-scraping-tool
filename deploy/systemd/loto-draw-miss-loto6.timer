@@ -1,0 +1,10 @@
+[Unit]
+Description=Loto6 draw-night miss check at 23:00 (Mon/Thu)
+
+[Timer]
+Unit=loto-draw-miss@loto6.service
+OnCalendar=Mon,Thu *-*-* 23:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -51,20 +51,23 @@ def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback
     game_def = get_game(config, game)
     store = Store(Path(config["_sqlite_path"]))
     inserted = skipped = absent = failed = 0
+    changed = 0
     saved_nos: list[int] = []
     try:
         primary = _ingest_lastresults(config, game, store, lookback=lookback)
         inserted += primary["inserted"]
         skipped += primary["skipped"]
         failed += primary["failed"]
+        changed += primary["changed"]
         saved_nos.extend(primary["saved_nos"])
 
         months = _recent_month_keys(store, game, extra=1)
         for yyyymm in months:
             try:
-                nos = _ingest_month(config, game, store, yyyymm, refresh=True)
-                saved_nos.extend(nos)
-                inserted += len(nos)
+                result = _ingest_month(config, game, store, yyyymm, refresh=True)
+                saved_nos.extend(result["saved_nos"])
+                changed += result["changed"]
+                inserted += result["changed"]
             except FetchError as exc:
                 failed += 1
                 logger.error("[%s] 月次 %s 取得失敗: %s", game, yyyymm, exc)
@@ -80,8 +83,20 @@ def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback
         store.export_csv(Path(config["_csv_path"]), game=game)
     finally:
         store.close()
-    logger.info("[%s] 楽天速報 新規/更新相当%s スキップ%s 失敗%s", game, inserted, skipped, failed)
-    return {"inserted": inserted, "skipped": skipped, "absent": absent, "failed": failed}
+    logger.info(
+        "[%s] 楽天速報 変更%s スキップ%s 失敗%s",
+        game,
+        changed,
+        skipped,
+        failed,
+    )
+    return {
+        "inserted": inserted,
+        "skipped": skipped,
+        "absent": absent,
+        "failed": failed,
+        "changed": changed,
+    }
 
 
 def collect_rakuten_history(
@@ -94,6 +109,7 @@ def collect_rakuten_history(
     game_def = get_game(config, game)
     store = Store(Path(config["_sqlite_path"]))
     inserted = skipped = failed = 0
+    changed = 0
     saved_nos: list[int] = []
     try:
         months = _list_month_paths(config, game)
@@ -101,14 +117,22 @@ def collect_rakuten_history(
         existing = set() if refresh else store.existing_draw_nos(game)
         for yyyymm in months:
             try:
-                nos = _ingest_month(config, game, store, yyyymm, refresh=refresh, skip_existing=existing)
-                for n in nos:
+                result = _ingest_month(
+                    config,
+                    game,
+                    store,
+                    yyyymm,
+                    refresh=refresh,
+                    skip_existing=existing,
+                )
+                for n in result["saved_nos"]:
                     if n in existing and not refresh:
                         skipped += 1
                     else:
                         inserted += 1
                         saved_nos.append(n)
                         existing.add(n)
+                changed += result["changed"]
             except FetchError as exc:
                 failed += 1
                 logger.error("[%s] 月次 %s: %s", game, yyyymm, exc)
@@ -124,7 +148,83 @@ def collect_rakuten_history(
     finally:
         store.close()
     logger.info("[%s] 楽天過去 保存相当%s スキップ%s 失敗%s", game, inserted, skipped, failed)
-    return {"inserted": inserted, "skipped": skipped, "absent": 0, "failed": failed}
+    return {
+        "inserted": inserted,
+        "skipped": skipped,
+        "absent": 0,
+        "failed": failed,
+        "changed": changed,
+    }
+
+
+def backfill_missing_prizes(config: dict[str, Any], game: str = "loto6") -> dict[str, int]:
+    """金額が欠けている回だけ、対象月の月次ページを再取得して埋める（1回きりの補完用）。"""
+    game_def = get_game(config, game)
+    store = Store(Path(config["_sqlite_path"]))
+    filled = still_missing = failed = 0
+    saved_nos: list[int] = []
+    try:
+        before_rows = store.draws_missing_prizes(game)
+        before = {int(r["draw_no"]) for r in before_rows}
+        if not before:
+            logger.info("[%s] 金額欠けなし", game)
+            return {"filled": 0, "still_missing": 0, "failed": 0, "months": 0, "changed": 0}
+
+        months = sorted(
+            {
+                str(r["draw_date"])[:7].replace("-", "")
+                for r in before_rows
+                if r["draw_date"] and len(str(r["draw_date"])) >= 7
+            }
+        )
+        logger.info("[%s] 金額補完: 欠け %s 回 / 月次 %s 件", game, len(before), len(months))
+        for yyyymm in months:
+            try:
+                result = _ingest_month(config, game, store, yyyymm, refresh=True)
+                saved_nos.extend(result["saved_nos"])
+            except FetchError as exc:
+                failed += 1
+                logger.error("[%s] 補完 月次 %s: %s", game, yyyymm, exc)
+            except Exception as exc:  # noqa: BLE001
+                failed += 1
+                logger.error("[%s] 補完 月次 %s 解析: %s", game, yyyymm, exc)
+
+        after = {int(r["draw_no"]) for r in store.draws_missing_prizes(game)}
+        filled = len(before - after)
+        still_missing = len(after)
+        if saved_nos:
+            from loto6.flash_article import refresh_articles
+
+            refresh_articles(store, game_def, sorted(set(saved_nos) & before))
+        store.export_csv(Path(config["_csv_path"]), game=game)
+        logger.info("[%s] 金額補完 埋まった%s / 残null%s / 失敗%s", game, filled, still_missing, failed)
+        return {
+            "filled": filled,
+            "still_missing": still_missing,
+            "failed": failed,
+            "months": len(months),
+            "changed": filled,
+        }
+    finally:
+        store.close()
+
+
+def check_draw_night_numbers(config: dict[str, Any], game: str) -> bool:
+    """抽せん日なのに当日の番号が DB に無いとき False。非抽せん日は True。"""
+    today = date.today()
+    # Mon=0 ... Sun=6 / ロト6=月木, ロト7=金, ミニロト=火
+    draw_weekdays = {"loto6": {0, 3}, "loto7": {4}, "miniloto": {1}}
+    if today.weekday() not in draw_weekdays.get(game, set()):
+        return True
+
+    store = Store(Path(config["_sqlite_path"]))
+    try:
+        row = store.latest_draw(game)
+        if row is None:
+            return False
+        return str(row["draw_date"])[:10] == today.isoformat()
+    finally:
+        store.close()
 
 
 def _ingest_lastresults(
@@ -136,7 +236,7 @@ def _ingest_lastresults(
     r = _rakuten_cfg(config)
     path = r["lastresults"].get(game)
     if not path:
-        return {"inserted": 0, "skipped": 0, "failed": 0, "saved_nos": []}
+        return {"inserted": 0, "skipped": 0, "failed": 0, "changed": 0, "saved_nos": []}
     game_def = get_game(config, game)
     client = _client(config, path)
     try:
@@ -144,10 +244,10 @@ def _ingest_lastresults(
     except FetchError as exc:
         logger.error("[%s] lastresults 取得失敗: %s", game, exc)
         client.close()
-        return {"inserted": 0, "skipped": 0, "failed": 1, "saved_nos": []}
+        return {"inserted": 0, "skipped": 0, "failed": 1, "changed": 0, "saved_nos": []}
     client.close()
     if status != 200 or not body:
-        return {"inserted": 0, "skipped": 0, "failed": 1, "saved_nos": []}
+        return {"inserted": 0, "skipped": 0, "failed": 1, "changed": 0, "saved_nos": []}
     html = body.decode("utf-8", errors="replace")
     source = r["base_url"] + path
     draws = parse_rakuten_lastresults(
@@ -159,7 +259,7 @@ def _ingest_lastresults(
         min_number=int(game_def["min_number"]),
         max_number=int(game_def["max_number"]),
     )
-    inserted = skipped = 0
+    inserted = skipped = changed = 0
     saved_nos: list[int] = []
     existing_max = max(store.existing_draw_nos(game), default=0)
     floor = max(1, existing_max - lookback + 1) if existing_max else 1
@@ -169,12 +269,19 @@ def _ingest_lastresults(
             continue
         if store.save(draw, stage="numbers"):
             inserted += 1
+            changed += 1
             saved_nos.append(draw.draw_no)
             logger.info("[%s] 番号 第%s回を保存", game, draw.draw_no)
         else:
             skipped += 1
             saved_nos.append(draw.draw_no)
-    return {"inserted": inserted, "skipped": skipped, "failed": 0, "saved_nos": saved_nos}
+    return {
+        "inserted": inserted,
+        "skipped": skipped,
+        "failed": 0,
+        "changed": changed,
+        "saved_nos": saved_nos,
+    }
 
 
 def _ingest_month(
@@ -185,7 +292,7 @@ def _ingest_month(
     *,
     refresh: bool = False,
     skip_existing: set[int] | None = None,
-) -> list[int]:
+) -> dict[str, Any]:
     r = _rakuten_cfg(config)
     slug = SLUG[game]
     path = r["month_path"].format(slug=slug, yyyymm=yyyymm)
@@ -197,7 +304,7 @@ def _ingest_month(
         client.close()
     if status == 404 or not body:
         logger.info("[%s] 月次なし %s", game, yyyymm)
-        return []
+        return {"saved_nos": [], "changed": 0}
     if status != 200:
         raise FetchError(f"HTTP {status} {path}")
     html = body.decode("utf-8", errors="replace")
@@ -213,15 +320,17 @@ def _ingest_month(
         prize_grades=int(game_def["prize_grades"]),
     )
     saved: list[int] = []
+    changed = 0
     for draw in draws:
         if skip_existing is not None and draw.draw_no in skip_existing and not refresh:
             continue
         if store.save(draw, refresh=refresh, stage="official"):
+            changed += 1
             saved.append(draw.draw_no)
             logger.info("[%s] 公式相当 第%s回を保存", game, draw.draw_no)
         else:
             saved.append(draw.draw_no)
-    return saved
+    return {"saved_nos": saved, "changed": changed}
 
 
 def _recent_month_keys(store: Store, game: str, extra: int = 1) -> list[str]:
@@ -238,7 +347,6 @@ def _recent_month_keys(store: Store, game: str, extra: int = 1) -> list[str]:
     if m <= 0:
         y, m = y - 1, 12
     keys.append(f"{y:04d}{m:02d}")
-    # unique keep order
     out: list[str] = []
     for k in keys:
         if k not in out:
@@ -266,5 +374,4 @@ def _list_month_paths(config: dict[str, Any], game: str) -> list[str]:
         matched = pattern.search(href)
         if matched:
             months.append(matched.group(1))
-    # 古い順
     return sorted(set(months))

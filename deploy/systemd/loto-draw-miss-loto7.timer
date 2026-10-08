@@ -1,0 +1,10 @@
+[Unit]
+Description=Loto7 draw-night miss check at 23:00 (Fri)
+
+[Timer]
+Unit=loto-draw-miss@loto7.service
+OnCalendar=Fri *-*-* 23:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

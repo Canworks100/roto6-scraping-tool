@@ -379,9 +379,19 @@ def parse_rakuten_month_html(
         if not matched or not date_cell:
             continue
         main_vals = fields.get("本数字") or []
+        if not main_vals:
+            # ミニロト等: 見出しが「本数字 ()はボーナス数字」でボーナスが同じ行の (nn)
+            for key, vals in fields.items():
+                if key.startswith("本数字"):
+                    main_vals = vals
+                    break
         numbers = [int(v) for v in main_vals if re.fullmatch(r"\d+", v)][:main_count]
         bonus_vals = fields.get("ボーナス数字") or fields.get("ボーナス") or []
         bonus_nums = [int(v) for v in re.findall(r"\d+", " ".join(bonus_vals))][:bonus_count]
+        if len(bonus_nums) < bonus_count:
+            # 本数字行の括弧内をボーナスとみなす
+            paren = re.findall(r"\((\d+)\)", " ".join(main_vals))
+            bonus_nums = [int(v) for v in paren][:bonus_count]
         if len(numbers) != main_count or len(bonus_nums) < bonus_count:
             continue
         try:

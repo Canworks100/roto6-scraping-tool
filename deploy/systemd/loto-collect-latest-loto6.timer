@@ -3,9 +3,16 @@ Description=Loto6 latest collect on draw nights (Mon/Thu)
 
 [Timer]
 Unit=loto-collect-latest@loto6.service
-OnCalendar=Mon,Thu *-*-* 21:15:00
+# 抽せん〜楽天掲載のあと、おおむね15分以内に拾う
+OnCalendar=Mon,Thu *-*-* 20:50:00
+OnCalendar=Mon,Thu *-*-* 21:05:00
+OnCalendar=Mon,Thu *-*-* 21:20:00
+OnCalendar=Mon,Thu *-*-* 21:35:00
+OnCalendar=Mon,Thu *-*-* 21:55:00
+OnCalendar=Mon,Thu *-*-* 22:20:00
+OnCalendar=Mon,Thu *-*-* 22:50:00
 Persistent=true
-RandomizedDelaySec=3m
+RandomizedDelaySec=90
 
 [Install]
 WantedBy=timers.target

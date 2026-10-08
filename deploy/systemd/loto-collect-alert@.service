@@ -8,6 +8,6 @@ User=loto
 Group=loto
 WorkingDirectory=/opt/loto
 Environment=PYTHONPATH=/opt/loto/src
+EnvironmentFile=-/etc/vps-backup/discord.env
 EnvironmentFile=-/etc/loto/alert.env
-# systemd OnFailure 用。Webhook 未設定ならログのみ。
 ExecStart=/opt/loto/.venv/bin/python -c "from loto6.notify import alert; alert('systemd OnFailure: loto-collect-latest@%i が失敗しました')"

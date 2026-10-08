@@ -7,6 +7,8 @@ const apiProxy = {
   },
 };
 
+const outDir = process.env.LOTO_DIST_DIR || "dist";
+
 export default defineConfig({
   server: {
     port: 5173,
@@ -17,7 +19,7 @@ export default defineConfig({
     proxy: apiProxy,
   },
   build: {
-    outDir: "dist",
+    outDir,
     emptyOutDir: true,
   },
   appType: "spa",
