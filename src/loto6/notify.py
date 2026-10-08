@@ -39,7 +39,11 @@ def alert(text: str, *, channel_hint: str = "#vps-監視") -> bool:
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Discord(Cloudflare) は UA 無しだと 403 になることがある
+            "User-Agent": "LOTO-VPS-Alert/1.0",
+        },
         method="POST",
     )
     try:
