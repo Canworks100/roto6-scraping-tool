@@ -53,10 +53,35 @@ export function gameMeta(game: string) {
   }>(`/api/${game}/meta`);
 }
 
-export function history(game: string, limit = 50, offset = 0) {
-  return getJson<{ total: number; items: DrawItem[]; limit: number; offset: number }>(
-    `/api/${game}/history?limit=${limit}&offset=${offset}`,
-  );
+export type HistoryQuery = {
+  limit?: number;
+  offset?: number;
+  period?: string;
+  sort?: "newest" | "oldest";
+  from?: string;
+  to?: string;
+};
+
+export function history(game: string, opts: HistoryQuery | number = 50, offset = 0) {
+  const q: HistoryQuery =
+    typeof opts === "number" ? { limit: opts, offset } : { limit: 50, offset: 0, ...opts };
+  const params = new URLSearchParams();
+  params.set("limit", String(q.limit ?? 50));
+  params.set("offset", String(q.offset ?? 0));
+  if (q.period && q.period !== "all") params.set("period", q.period);
+  if (q.sort && q.sort !== "newest") params.set("sort", q.sort);
+  if (q.from) params.set("from", q.from);
+  if (q.to) params.set("to", q.to);
+  return getJson<{
+    total: number;
+    items: DrawItem[];
+    limit: number;
+    offset: number;
+    period?: string;
+    sort?: string;
+    from?: string | null;
+    to?: string | null;
+  }>(`/api/${game}/history?${params}`);
 }
 
 export function search(game: string, numbers: number[], limit = 40, offset = 0) {

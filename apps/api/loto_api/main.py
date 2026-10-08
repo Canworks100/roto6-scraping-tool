@@ -26,6 +26,7 @@ from loto6.analyze import (  # noqa: E402
     number_payload,
     parse_period,
     to_payload,
+    years_ago,
 )
 from loto6.config import abs_path, load_config  # noqa: E402
 from loto6.eyecatch import eyecatch_svg  # noqa: E402
@@ -145,20 +146,81 @@ def game_meta(game: str, store: Annotated[Store, Depends(get_store)]) -> dict[st
     }
 
 
+def _history_bounds(
+    store: Store,
+    game: str,
+    period: str,
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[str | None, str | None, int | None]:
+    """Return (start_date, end_date, draw_limit). draw_limit is for drawsN periods."""
+    start = date_from or None
+    end = date_to or None
+    draw_limit: int | None = None
+    if date_from or date_to:
+        return start, end, None
+    if period == "all":
+        return None, None, None
+    if period.startswith("draws"):
+        draw_limit = int(period.replace("draws", ""))
+        return None, None, draw_limit
+    if period.startswith("years"):
+        years = int(period.replace("years", ""))
+        return years_ago(years), None, None
+    raise HTTPException(status_code=400, detail="期間が不正です")
+
+
 @app.get("/api/{game}/history")
 def history(
     game: str,
     store: Annotated[Store, Depends(get_store)],
     limit: int = Query(default=50, ge=0, le=500),
     offset: int = Query(default=0, ge=0, le=100000),
+    period: str = Query(default="all"),
+    sort: Literal["newest", "oldest"] = Query(default="newest"),
+    date_from: str | None = Query(default=None, alias="from"),
+    date_to: str | None = Query(default=None, alias="to"),
 ) -> dict[str, Any]:
     g = parse_game(game)
     main_count = int(g["main_count"])
-    total = store.count_draws(game)
+    try:
+        key = parse_period(period, None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    start, end, draw_limit = _history_bounds(store, game, key, date_from, date_to)
+    newest_first = sort == "newest"
     effective = 500 if limit == 0 else limit
-    rows = store.load_draws(game=game, limit=effective, offset=offset, newest_first=True)
-    items = [row_to_draw(row, main_count) for row in rows]
-    return {"game": game, "total": total, "limit": effective, "offset": offset, "items": items}
+
+    if draw_limit is not None:
+        window = store.load_draws(game=game, limit=draw_limit, newest_first=True)
+        if not newest_first:
+            window = list(reversed(window))
+        total = len(window)
+        page = window[offset : offset + effective]
+        items = [row_to_draw(row, main_count) for row in page]
+    else:
+        total = store.count_draws(game=game, start_date=start, end_date=end)
+        rows = store.load_draws(
+            game=game,
+            start_date=start,
+            end_date=end,
+            limit=effective,
+            offset=offset,
+            newest_first=newest_first,
+        )
+        items = [row_to_draw(row, main_count) for row in rows]
+
+    return {
+        "game": game,
+        "total": total,
+        "limit": effective,
+        "offset": offset,
+        "period": key,
+        "sort": sort,
+        "from": start,
+        "to": end,
+        "items": items,
+    }
 
 
 @app.get("/api/{game}/search")

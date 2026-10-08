@@ -263,72 +263,111 @@ function writePage(path, title, description, bodyHtml, jsonLd, article) {
   writeFileSync(join(dir, "index.html"), html);
 }
 
-function gamePageLinks(game) {
-  const links = [
-    ["latest", "最新結果"],
-    ["generate", "次回予想"],
-    ["history", "結果一覧"],
-    ["freq", "出現回数"],
-    ["pairs", "組み合わせ"],
-    ["shape", "奇数偶数"],
-    ["grid", "出目表"],
-    ["follow", "前回を含む回数"],
-    ["ranks", "金額ランキング"],
-    ["search", "数字検索"],
-    ["combo", "組合診断"],
-    ["flash", "速報"],
-  ]
-    .map(([id, t]) => `<a href="/${game.id}/${id}"><span class="g">${t}</span></a>`)
-    .join("");
-  return `${links}
-    <a href="/${game.id}/guide/how-to-buy"><span class="g">買い方</span></a>
-    <a href="/${game.id}/guide/odds"><span class="g">確率</span></a>
-    <a href="/${game.id}/guide/faq"><span class="g">FAQ</span></a>`;
+function chipNav(game, compact) {
+  const pages = compact
+    ? [
+        ["latest", "最新結果"],
+        ["generate", "次回予想"],
+        ["freq", "出現回数"],
+        ["history", "結果一覧"],
+        ["flash", "速報"],
+      ]
+    : [
+        ["latest", "最新結果"],
+        ["generate", "次回予想"],
+        ["history", "結果一覧"],
+        ["freq", "出現回数"],
+        ["pairs", "組み合わせ"],
+        ["shape", "奇数偶数"],
+        ["grid", "出目表"],
+        ["follow", "前回を含む回数"],
+        ["ranks", "金額ランキング"],
+        ["search", "数字検索"],
+        ["combo", "組合診断"],
+        ["flash", "速報"],
+      ];
+  const links = pages.map(([id, t]) => `<a href="/${game.id}/${id}">${t}</a>`).join("");
+  const guides = compact
+    ? ""
+    : `<a href="/${game.id}/guide/how-to-buy">買い方</a>
+       <a href="/${game.id}/guide/odds">確率</a>
+       <a href="/${game.id}/guide/faq">FAQ</a>`;
+  return `<nav class="chip-nav">${links}${guides}</nav>`;
 }
 
-function gameBlockBody(game, headingTag, linkTitle) {
+function homeCardBody(game) {
   const gdata = db.games?.[game.id] || {};
   const latest = gdata.latest;
   const nextNums = gdata.next_numbers || [];
   const nextNo = gdata.next_draw_no;
   const nextDate = gdata.next_draw_date;
-  const title = linkTitle
-    ? `<a href="/${game.id}">${game.label}</a>`
-    : game.label;
-  const latestHtml = latest
-    ? `<p class="muted">第${pad4(latest.draw_no)}回（${formatDateJa(latest.draw_date)}）</p>
-       <div class="flash-balls">${ballsHtml(latest.numbers, latest.bonus)}</div>
-       <p class="howto"><a href="/${game.id}/latest">最新結果</a></p>`
-    : `<p class="muted">—</p>`;
-  const nextHtml = nextNums.length
-    ? `<p class="muted">${nextNo != null ? `第${pad4(nextNo)}回` : "次回"}${nextDate ? `（抽せん日 ${formatDateJa(nextDate)}）` : ""}</p>
-       <div class="flash-balls"><span class="balls"><span class="balls-main">${nextNums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("")}</span></span></div>
-       <p class="howto"><a href="/${game.id}/generate">次回予想・口数で作成</a></p>`
-    : `<p class="muted">—</p>`;
+  const latestLine = latest
+    ? `第${pad4(latest.draw_no)}回（${formatDateJa(latest.draw_date)}）`
+    : "—";
+  const nextLine =
+    nextNo != null
+      ? `第${pad4(nextNo)}回${nextDate ? `（${formatDateJa(nextDate)}）` : ""}`
+      : "—";
+  return `<article class="home-card">
+    <h2 class="home-card-lab"><a href="/${game.id}">${game.label}</a></h2>
+    <section class="home-card-feat">
+      <p class="home-card-k"><span>最新の当選番号</span></p>
+      <p class="home-card-v">${latestLine}</p>
+      <div class="home-card-balls">${latest ? ballsHtml(latest.numbers, latest.bonus) : "—"}</div>
+      <p class="home-card-more"><a href="/${game.id}/latest">最新結果をみる</a></p>
+    </section>
+    <section class="home-card-feat">
+      <p class="home-card-k"><span>次回予想</span></p>
+      <p class="home-card-v">${nextLine}</p>
+      <div class="home-card-balls">${
+        nextNums.length
+          ? `<span class="balls"><span class="balls-main">${nextNums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("")}</span></span>`
+          : "—"
+      }</div>
+      <p class="home-card-more"><a href="/${game.id}/generate">次回予想をみる</a></p>
+    </section>
+    <div class="home-card-more-nav">${chipNav(game, true)}</div>
+  </article>`;
+}
+
+function gameBlockBody(game) {
+  const gdata = db.games?.[game.id] || {};
+  const latest = gdata.latest;
+  const nextNums = gdata.next_numbers || [];
+  const nextNo = gdata.next_draw_no;
+  const nextDate = gdata.next_draw_date;
+  const latestLine = latest
+    ? `第${pad4(latest.draw_no)}回（${formatDateJa(latest.draw_date)}）`
+    : "—";
+  const nextLine =
+    nextNo != null
+      ? `第${pad4(nextNo)}回${nextDate ? `（抽せん日 ${formatDateJa(nextDate)}）` : ""}`
+      : "—";
   return `<article class="game-block box">
-    <${headingTag} class="game-block-title">${title}</${headingTag}>
+    <h1 class="game-block-title">${game.label}</h1>
     <section class="game-block-sec">
       <h3>${game.label}｜最新の当選番号</h3>
-      ${latestHtml}
+      <p class="muted">${latestLine}</p>
+      <div class="flash-balls">${latest ? ballsHtml(latest.numbers, latest.bonus) : "—"}</div>
     </section>
     <section class="game-block-sec">
       <h3>${game.label}｜次回予想</h3>
-      ${nextHtml}
+      <p class="muted">${nextLine}</p>
+      <div class="flash-balls">${
+        nextNums.length
+          ? `<span class="balls"><span class="balls-main">${nextNums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("")}</span></span>`
+          : "—"
+      }</div>
     </section>
     <section class="game-block-sec">
       <h3>${game.label}のページ</h3>
-      <nav class="home-list">${gamePageLinks(game)}</nav>
+      ${chipNav(game, false)}
     </section>
   </article>`;
 }
 
 function hubBody(game) {
-  return `<section class="hub">
-    <header class="hub-head">
-      <p class="hub-lead">${game.label}の当選番号・出現回数・予想</p>
-    </header>
-    ${gameBlockBody(game, "h1", false)}
-  </section>`;
+  return `<section class="hub">${gameBlockBody(game)}</section>`;
 }
 
 function loadDbBundle() {
@@ -465,13 +504,23 @@ function ballsHtml(numbers, bonus) {
 }
 
 function homeBody() {
-  const blocks = GAMES.map((game) => gameBlockBody(game, "h2", true)).join("");
-  return `<section class="hub">
+  const cards = GAMES.map((game) => homeCardBody(game)).join("");
+  const dirs = GAMES.map(
+    (game) => `<div class="home-dir-row">
+      <h3><a href="/${game.id}">${game.label}</a></h3>
+      ${chipNav(game, false)}
+    </div>`,
+  ).join("");
+  return `<section class="home-fv">
     <header class="hub-head">
       <h1 class="hub-title">LOTO アナリティクス</h1>
       <p class="hub-lead">ロト6・ロト7・ミニロトの当選番号と出現回数</p>
     </header>
-    ${blocks}
+    <div class="home-kpi">${cards}</div>
+  </section>
+  <section class="box home-dirs">
+    <h2>ページ一覧</h2>
+    <div class="inner">${dirs}</div>
   </section>`;
 }
 

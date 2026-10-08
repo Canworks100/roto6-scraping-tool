@@ -402,29 +402,56 @@ async function renderGuide(game: string, info: GameInfo) {
   bindLinks();
 }
 
-function gamePageNav(game: string, label: string): string {
-  const pages = GAME_PAGES.map(
-    ([id, title]) =>
-      `<a href="${viewPath(game, id)}" data-link><span class="g">${title}</span></a>`,
-  ).join("");
-  return `<nav class="home-list" aria-label="${esc(label)}のページ">
-    ${pages}
-    <a href="/${game}/guide/how-to-buy" data-link><span class="g">買い方</span></a>
-    <a href="/${game}/guide/odds" data-link><span class="g">確率</span></a>
-    <a href="/${game}/guide/faq" data-link><span class="g">FAQ</span></a>
-  </nav>`;
+const HOME_QUICK: [string, string][] = [
+  ["latest", "最新結果"],
+  ["generate", "次回予想"],
+  ["freq", "出現回数"],
+  ["history", "結果一覧"],
+  ["flash", "速報"],
+];
+
+function gameChipNav(game: string, label: string, compact = false): string {
+  const items = compact ? HOME_QUICK : GAME_PAGES;
+  const pages = items
+    .map(([id, title]) => `<a href="${viewPath(game, id)}" data-link>${title}</a>`)
+    .join("");
+  const guides = compact
+    ? ""
+    : `<a href="/${game}/guide/how-to-buy" data-link>買い方</a>
+       <a href="/${game}/guide/odds" data-link>確率</a>
+       <a href="/${game}/guide/faq" data-link>FAQ</a>`;
+  return `<nav class="chip-nav" aria-label="${esc(label)}のページ">${pages}${guides}</nav>`;
 }
 
-function latestSummaryHtml(item: DrawItem | null): string {
-  if (!item) return `<p class="muted">—</p>`;
-  return `<p class="muted">${formatDraw(item.draw_no)}（${formatDate(item.draw_date)}）</p>
-    <div class="flash-balls">${ballsHtml(item)}</div>`;
-}
-
-function nextSummaryHtml(pick: api.WeekPick | null): string {
-  if (!pick) return `<p class="muted">—</p>`;
-  return `<p class="muted">${formatDraw(pick.next_draw_no)}（抽せん日 ${formatDate(pick.next_draw_date)}）</p>
-    <div class="flash-balls">${numberBalls(pick.next)}</div>`;
+function homeGameCardHtml(opts: {
+  game: string;
+  label: string;
+  latest: DrawItem | null;
+  pick: api.WeekPick | null;
+}): string {
+  const { game, label, latest, pick } = opts;
+  const latestLine = latest
+    ? `${formatDraw(latest.draw_no)}（${formatDate(latest.draw_date)}）`
+    : "—";
+  const nextLine = pick
+    ? `${formatDraw(pick.next_draw_no)}（${formatDate(pick.next_draw_date)}）`
+    : "—";
+  return `<article class="home-card">
+    <h2 class="home-card-lab"><a href="/${game}" data-link>${esc(label)}</a></h2>
+    <section class="home-card-feat">
+      <p class="home-card-k"><span>最新の当選番号</span></p>
+      <p class="home-card-v">${esc(latestLine)}</p>
+      <div class="home-card-balls">${latest ? ballsHtml(latest) : "—"}</div>
+      <p class="home-card-more"><a href="${viewPath(game, "latest")}" data-link>最新結果をみる</a></p>
+    </section>
+    <section class="home-card-feat">
+      <p class="home-card-k"><span>次回予想</span></p>
+      <p class="home-card-v">${esc(nextLine)}</p>
+      <div class="home-card-balls">${pick ? numberBalls(pick.next) : "—"}</div>
+      <p class="home-card-more"><a href="${viewPath(game, "generate")}" data-link>次回予想をみる</a></p>
+    </section>
+    <div class="home-card-more-nav">${gameChipNav(game, label, true)}</div>
+  </article>`;
 }
 
 function gameBlockHtml(opts: {
@@ -433,27 +460,29 @@ function gameBlockHtml(opts: {
   headingLevel: "h1" | "h2";
   latest: DrawItem | null;
   pick: api.WeekPick | null;
-  showGameLink?: boolean;
 }): string {
-  const { game, label, headingLevel: H, latest, pick, showGameLink } = opts;
-  const title = showGameLink
-    ? `<a href="/${game}" data-link>${esc(label)}</a>`
-    : esc(label);
+  const { game, label, headingLevel: H, latest, pick } = opts;
+  const latestLine = latest
+    ? `${formatDraw(latest.draw_no)}（${formatDate(latest.draw_date)}）`
+    : "—";
+  const nextLine = pick
+    ? `${formatDraw(pick.next_draw_no)}（抽せん日 ${formatDate(pick.next_draw_date)}）`
+    : "—";
   return `<article class="game-block box">
-    <${H} class="game-block-title">${title}</${H}>
+    <${H} class="game-block-title">${esc(label)}</${H}>
     <section class="game-block-sec">
       <h3>${esc(label)}｜最新の当選番号</h3>
-      ${latestSummaryHtml(latest)}
-      <p class="howto"><a href="${viewPath(game, "latest")}" data-link>最新結果</a></p>
+      <p class="muted">${esc(latestLine)}</p>
+      <div class="flash-balls">${latest ? ballsHtml(latest) : "—"}</div>
     </section>
     <section class="game-block-sec">
       <h3>${esc(label)}｜次回予想</h3>
-      ${nextSummaryHtml(pick)}
-      <p class="howto"><a href="${viewPath(game, "generate")}" data-link>次回予想・口数で作成</a></p>
+      <p class="muted">${esc(nextLine)}</p>
+      <div class="flash-balls">${pick ? numberBalls(pick.next) : "—"}</div>
     </section>
     <section class="game-block-sec">
       <h3>${esc(label)}のページ</h3>
-      ${gamePageNav(game, label)}
+      ${gameChipNav(game, label)}
     </section>
   </article>`;
 }
@@ -480,31 +509,38 @@ async function loadLatestAndPick(game: string): Promise<{
 async function renderHome(seq: number) {
   setSeo("/");
   setJsonLd(null);
-  const blocks = [];
+  const cards = [];
+  const dirRows = [];
   for (const g of games) {
     if (seq !== renderSeq) return;
     const { latest, pick } = await loadLatestAndPick(g.id);
-    blocks.push(
-      gameBlockHtml({
+    cards.push(
+      homeGameCardHtml({
         game: g.id,
         label: g.label,
-        headingLevel: "h2",
         latest,
         pick,
-        showGameLink: true,
       }),
     );
+    dirRows.push(`<div class="home-dir-row">
+      <h3><a href="/${g.id}" data-link>${esc(g.label)}</a></h3>
+      ${gameChipNav(g.id, g.label)}
+    </div>`);
   }
   paint(
     seq,
     shell(
       `
-    <section class="hub">
+    <section class="home-fv">
       <header class="hub-head">
         <h1 class="hub-title">LOTO アナリティクス</h1>
         <p class="hub-lead">ロト6・ロト7・ミニロトの当選番号と出現回数</p>
       </header>
-      ${blocks.join("")}
+      <div class="home-kpi">${cards.join("")}</div>
+    </section>
+    <section class="box home-dirs">
+      <h2>ページ一覧</h2>
+      <div class="inner">${dirRows.join("")}</div>
     </section>
   `,
       undefined,
@@ -522,9 +558,6 @@ async function renderHub(game: string, info: GameInfo, seq: number) {
     shell(
       `
     <section class="hub">
-      <header class="hub-head">
-        <p class="hub-lead">${info.label}の当選番号・出現回数・予想</p>
-      </header>
       ${gameBlockHtml({
         game,
         label: info.label,
@@ -755,37 +788,125 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
   bindLinks();
 }
 
+function historyQueryFromUrl(): api.HistoryQuery {
+  const qs = new URLSearchParams(location.search);
+  const period = qs.get("period") || "all";
+  const sort = qs.get("sort") === "oldest" ? "oldest" : "newest";
+  const from = qs.get("from") || undefined;
+  const to = qs.get("to") || undefined;
+  return { period, sort, from, to };
+}
+
+function historyUrl(game: string, q: api.HistoryQuery): string {
+  const params = new URLSearchParams();
+  if (q.period && q.period !== "all") params.set("period", q.period);
+  if (q.sort && q.sort !== "newest") params.set("sort", q.sort);
+  if (q.from) params.set("from", q.from);
+  if (q.to) params.set("to", q.to);
+  const s = params.toString();
+  return s ? `/${game}/history?${s}` : `/${game}/history`;
+}
+
 async function renderHistory(game: string, info: GameInfo) {
+  const grades = info.prize_grades;
+  const q = historyQueryFromUrl();
+  const periodKeys: [string, string][] = [
+    ["all", "全期間"],
+    ["years1", "過去1年"],
+    ["years3", "過去3年"],
+    ["years5", "過去5年"],
+    ["years10", "過去10年"],
+    ["draws100", "直近100回"],
+    ["draws500", "直近500回"],
+  ];
+
+  const loadPage = async (offset: number) =>
+    api.history(game, { ...q, limit: 40, offset });
+
   historyOffset = 0;
-  const page = await api.history(game, 40, 0);
+  const page = await loadPage(0);
   historyTotal = page.total;
   historyOffset = page.items.length;
-  const grades = info.prize_grades;
+
+  const periodBarHtml = `<div class="period-bar" id="hist-period">
+    ${periodKeys
+      .map(([id, label]) => {
+        const active = !q.from && !q.to && (q.period || "all") === id ? "active" : "";
+        return `<a href="${historyUrl(game, { ...q, period: id, from: undefined, to: undefined })}" class="${active}" data-link>${label}</a>`;
+      })
+      .join("")}
+  </div>`;
+
   root.innerHTML = shell(
     `
     <div class="box">
       <h1>${info.label} 当選番号一覧</h1>
-      ${howto("新しい回から順に、本数字・当せん金額・キャリーオーバー。回号から速報へ行けます。続きは「さらに表示」。")}
+      ${howto("抽せん日や期間で絞り込み、新しい順・古い順に並べ替えられます。回号から速報へ進めます。")}
+      <div class="inner hist-filters">
+        ${periodBarHtml}
+        <div class="toolbar hist-toolbar">
+          <label class="field">開始日
+            <input id="hist-from" type="date" value="${esc(q.from || "")}" />
+          </label>
+          <label class="field">終了日
+            <input id="hist-to" type="date" value="${esc(q.to || "")}" />
+          </label>
+          <label class="field">並び
+            <select id="hist-sort">
+              <option value="newest"${q.sort !== "oldest" ? " selected" : ""}>新しい順</option>
+              <option value="oldest"${q.sort === "oldest" ? " selected" : ""}>古い順</option>
+            </select>
+          </label>
+          <button type="button" class="btn btn-primary" id="hist-apply">絞り込む</button>
+        </div>
+        <p class="muted hist-count" id="hist-count">${historyTotal.toLocaleString("ja-JP")}件</p>
+      </div>
       <div class="inner pad0">
         <div class="table-wrap">
           <table class="data" id="hist-table">
             <thead><tr><th class="num">回</th><th>抽せん日</th><th>本数字／ボーナス</th>${prizeHeaders(grades)}<th class="num">キャリー</th></tr></thead>
-            <tbody id="hist-body">${page.items.map((item) => drawRow(item, [], `${prizeCells(item, grades)}${carryCell(item)}`, game)).join("")}</tbody>
+            <tbody id="hist-body">${
+              page.items.length
+                ? page.items
+                    .map((item) => drawRow(item, [], `${prizeCells(item, grades)}${carryCell(item)}`, game))
+                    .join("")
+                : `<tr><td colspan="${3 + grades + 1}">該当する回がありません。</td></tr>`
+            }</tbody>
           </table>
         </div>
+        <div class="inner" id="hist-more-wrap">
         ${
           historyOffset < historyTotal
-            ? `<div class="inner"><button type="button" class="btn more" id="more">さらに表示（${historyOffset}/${historyTotal}）</button></div>`
+            ? `<button type="button" class="btn more" id="more">さらに表示（${historyOffset}/${historyTotal}）</button>`
             : ""
         }
+        </div>
       </div>
     </div>
   `,
     game,
     "history",
   );
+
+  const applyFilters = () => {
+    const from = (document.querySelector("#hist-from") as HTMLInputElement).value || undefined;
+    const to = (document.querySelector("#hist-to") as HTMLInputElement).value || undefined;
+    const sort = (document.querySelector("#hist-sort") as HTMLSelectElement).value as "newest" | "oldest";
+    const next: api.HistoryQuery = {
+      period: from || to ? "all" : q.period || "all",
+      sort,
+      from,
+      to,
+    };
+    history.replaceState({}, "", historyUrl(game, next));
+    void renderHistory(game, info);
+  };
+
+  document.querySelector("#hist-apply")?.addEventListener("click", applyFilters);
+  document.querySelector("#hist-sort")?.addEventListener("change", applyFilters);
+
   document.querySelector("#more")?.addEventListener("click", async () => {
-    const more = await api.history(game, 40, historyOffset);
+    const more = await loadPage(historyOffset);
     historyOffset += more.items.length;
     document.querySelector("#hist-body")!.insertAdjacentHTML(
       "beforeend",

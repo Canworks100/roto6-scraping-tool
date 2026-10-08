@@ -9,6 +9,7 @@
   --rail: #000000;
   --accent: #eeff00;
   --accent-ink: #000000;
+  --bonus-ring: #e6b800;
   --warn-ink: #7a2e0b;
   --warn-mark: #b45309;
   --ok-ink: #14532d;
@@ -338,6 +339,24 @@ button {
   margin-bottom: 8px;
 }
 
+.hist-filters .period-bar {
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.hist-filters .hist-toolbar {
+  margin: 0 0 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.hist-filters .hist-count {
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
 .toolbar .grow {
   flex: 1;
 }
@@ -600,7 +619,9 @@ table.data td.nums {
 }
 
 .bonus {
-  border-style: dashed;
+  border-style: solid;
+  border-color: var(--bonus-ring);
+  background: var(--accent);
   color: var(--ink);
 }
 
@@ -916,6 +937,197 @@ table.data td.nums {
   line-height: 1.7;
 }
 
+.home-fv {
+  margin-bottom: 36px;
+}
+
+.home-fv .hub-head {
+  padding: 12px 8px 28px;
+}
+
+.home-fv .hub-title {
+  font-size: clamp(32px, 9vw, 48px);
+}
+
+.home-kpi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.home-card {
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  padding: 0;
+  min-width: 0;
+}
+
+.home-card-lab {
+  margin: 0;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--ink);
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.home-card-lab a {
+  color: inherit;
+}
+
+.home-card-feat {
+  padding: 22px 24px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.home-card-feat:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+
+.home-card-k {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.home-card-k span {
+  display: inline-block;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.home-card-v {
+  margin: 0 0 14px;
+  font-size: clamp(16px, 4vw, 18px);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.home-card-balls {
+  margin: 0 0 14px;
+}
+
+.home-card-balls .balls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.home-card-balls .balls-main {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: clamp(5px, 1.5vw, 8px);
+}
+
+.home-card-balls .bonus-group {
+  flex-basis: auto;
+  justify-content: center;
+  margin-top: 0;
+}
+
+.home-card-balls .ball,
+.home-card-balls .bonus {
+  width: clamp(36px, 9vw, 44px);
+  height: clamp(36px, 9vw, 44px);
+  font-size: clamp(14px, 3.5vw, 17px);
+}
+
+.home-card-more {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.home-card-more a {
+  border-bottom: 1px dashed var(--ink);
+  padding-bottom: 1px;
+}
+
+.home-card-more a:hover {
+  background: var(--ink);
+  color: #fff;
+  border-bottom-color: var(--ink);
+}
+
+.home-card-more-nav {
+  padding: 14px 20px 16px;
+  background: var(--zebra);
+}
+
+.home-card-more-nav .chip-nav a {
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--surface);
+}
+
+.chip-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.chip-nav a {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.chip-nav a:hover {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.home-dirs {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.home-dirs > h2 {
+  margin: 0;
+}
+
+.home-dir-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.home-dir-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.home-dir-row:first-child {
+  padding-top: 0;
+}
+
+.home-dir-row h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.home-dir-row h3 a {
+  color: inherit;
+}
+
 .game-block {
   margin: 0;
 }
@@ -992,22 +1204,8 @@ table.data td.nums {
   font-size: clamp(11px, 3vw, 15px);
 }
 
-.game-block-sec .home-list {
-  margin: 8px -28px -20px;
-}
-
-.game-block-sec .home-list a {
-  padding-left: 28px;
-  padding-right: 48px;
-}
-
-.game-block-sec .home-list a::after {
-  right: 28px;
-}
-
-.game-block-sec .howto {
-  margin: 8px 0 0;
-  padding: 0;
+.game-block-sec .chip-nav {
+  margin-top: 4px;
 }
 
 @media (min-width: 600px) {
@@ -1021,19 +1219,6 @@ table.data td.nums {
 
   .game-block-sec {
     padding: 24px 36px;
-  }
-
-  .game-block-sec .home-list {
-    margin: 8px -36px -24px;
-  }
-
-  .game-block-sec .home-list a {
-    padding-left: 36px;
-    padding-right: 56px;
-  }
-
-  .game-block-sec .home-list a::after {
-    right: 36px;
   }
 }
 
@@ -1734,16 +1919,23 @@ table.data tbody tr.hot {
   }
 
   .nav-pages {
-    flex-wrap: wrap;
-    overflow: visible;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
     width: 100%;
     margin: 0;
-    padding: 0 max(0px, calc((100% - 920px) / 2));
+    padding: 0 max(40px, calc((100% - 920px) / 2));
     box-sizing: border-box;
     justify-content: flex-start;
   }
 
+  .nav-pages::-webkit-scrollbar {
+    display: none;
+  }
+
   .nav-pages a {
+    flex: 0 0 auto;
     min-width: 6em;
     padding: 18px 14px;
     font-size: 13px;
