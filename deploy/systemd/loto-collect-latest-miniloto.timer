@@ -3,9 +3,15 @@ Description=Miniloto latest collect on draw nights (Tue)
 
 [Timer]
 Unit=loto-collect-latest@miniloto.service
-OnCalendar=Tue *-*-* 21:15:00
+OnCalendar=Tue *-*-* 20:50:00
+OnCalendar=Tue *-*-* 21:05:00
+OnCalendar=Tue *-*-* 21:20:00
+OnCalendar=Tue *-*-* 21:35:00
+OnCalendar=Tue *-*-* 21:55:00
+OnCalendar=Tue *-*-* 22:20:00
+OnCalendar=Tue *-*-* 22:50:00
 Persistent=true
-RandomizedDelaySec=3m
+RandomizedDelaySec=90
 
 [Install]
 WantedBy=timers.target

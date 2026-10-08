@@ -15,7 +15,7 @@
 | VPS | Conoha `160.251.237.42` |
 | SSH | オリジン IP へ直接（Cloudflare プロキシ経由では不可） |
 | アプリ | `/opt/loto/`（venv・`data/loto.sqlite`） |
-| 静的 | `/var/www/loto/`（本番）、`/var/www/loto-stg/`（ステージング） |
+| 静的 | `/var/www/loto-stg/`（本番 nginx root。旧 `/var/www/loto/` は使わない） |
 | 実行ユーザー | `loto` |
 
 ## 必要なもの
@@ -31,7 +31,7 @@
 ```
 Host lottery-analytics
   HostName 160.251.237.42
-  User root
+  User canworks
   IdentityFile ~/.ssh/lottery-analytics_conoha.pem
   IdentitiesOnly yes
 ```
@@ -94,10 +94,13 @@ export VITE_SITE_ORIGIN=https://lottery-analytics.com
 3. 必要なら `migrate-legacy` → 各種目 `collect --all` → `flash-articles`
 4. `apps/web` で上記オリジン付き `npm run build` → `dist` を `/var/www/loto/`
 5. `deploy/systemd/*` と `deploy/nginx/loto.conf` を配置して enable
-   - 速報タイマー（抽せん日の夜1回）:
-     `loto-collect-latest-loto6.timer` / `loto-collect-latest-loto7.timer` / `loto-collect-latest-miniloto.timer`
-   - 失敗通知: `/etc/loto/alert.env` に `LOTO_ALERT_WEBHOOK=`（Slack Incoming Webhook。秘密はリポジトリ外）。投稿先は **#vps-監視**
-   - 過去全件は初回のみ `collect --all`（間隔は `rate_limit` 3〜5秒）。日次の `loto-collect@*.timer` は楽天運用では enable しない
+   - 速報＋静的再公開（抽せん曜日・夜複数回）:
+     `loto-collect-latest-loto6.timer`（月木）/ `loto-collect-latest-loto7.timer`（金）/ `loto-collect-latest-miniloto.timer`（火）
+     → `collect-and-publish.sh`（`flock` 排他、変更時だけ `SITE_ORIGIN` 付きビルド → `/var/www/loto-stg/`）
+   - 23:00 番号未取得チェック: `loto-draw-miss-loto6|loto7|miniloto.timer`
+   - 失敗通知: `/etc/vps-backup/discord.env` の `DISCORD_WEBHOOK_URL`（#vps-監視）。互換で `/etc/loto/alert.env` の `LOTO_ALERT_WEBHOOK` も可。値はリポジトリに書かない
+   - みずほ夜間 `loto-collect@*.timer` は `disable --now`（または mask）。service は no-op
+   - 過去金額の欠けは初回のみ `python -m loto6 backfill-prizes --game all`（事前に DB バックアップ）
 6. certbot で TLS。HSTS は証明書取得後に有効化。Cloudflare を Full (strict) へ
 7. ファイアウォールは 22/80/443（SSH は鍵認証）
 8. 方針の詳細は `deploy/SECURITY.md`

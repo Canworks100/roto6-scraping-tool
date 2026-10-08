@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${DEPLOY_HOST:-lottery-analytics}"
 REMOTE_APP="${REMOTE_APP:-/opt/loto}"
-REMOTE_WWW="${REMOTE_WWW:-/var/www/loto}"
+REMOTE_WWW="${REMOTE_WWW:-/var/www/loto-stg}"
 SITE_ORIGIN="${SITE_ORIGIN:-https://lottery-analytics.com}"
 VITE_SITE_ORIGIN="${VITE_SITE_ORIGIN:-$SITE_ORIGIN}"
 STAMP="$(date +%Y%m%d-%H%M%S)"

@@ -4,7 +4,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dist = join(root, "dist");
+const distEnv = (process.env.LOTO_DIST_DIR || "").trim();
+const dist = distEnv
+  ? distEnv.startsWith("/")
+    ? distEnv
+    : join(root, distEnv)
+  : join(root, "dist");
 const repo = join(root, "..", "..");
 const origin = (process.env.SITE_ORIGIN || process.env.VITE_SITE_ORIGIN || "").replace(/\/+$/, "");
 const SITE = "LOTO アナリティクス";

@@ -1,15 +1,10 @@
 [Unit]
-Description=Loto collect job for %i
-After=network-online.target
-Wants=network-online.target
+Description=DISABLED legacy mizuho collect for %i (no-op under rakuten)
+# collector.source=rakuten では使わない。誤って timer が残っていても実収集しない。
 
 [Service]
 Type=oneshot
 User=loto
 Group=loto
 WorkingDirectory=/opt/loto
-Environment=PYTHONPATH=/opt/loto/src
-ExecStart=/opt/loto/.venv/bin/python -m loto6 collect --game %i --years 1
-Nice=10
-NoNewPrivileges=true
-PrivateTmp=true
+ExecStart=/bin/sh -c 'echo "skip: loto-collect@%i is disabled (mizuho legacy)" >&2'

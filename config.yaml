@@ -1,8 +1,14 @@
 # ロト収集・公開サイトの設定。
 
-# 収集元: rakuten（既定）| mizuho（レガシー・BrowserClient）。失敗通知は環境変数 LOTO_ALERT_WEBHOOK
+# 収集元: rakuten（既定）| mizuho（レガシー・BrowserClient）。
+# 失敗通知: DISCORD_WEBHOOK_URL（/etc/vps-backup/discord.env）または LOTO_ALERT_WEBHOOK
 collector:
   source: rakuten
+
+# 収集後の静的公開（--publish / collect-and-publish.sh）
+publish:
+  site_origin: "https://lottery-analytics.com"
+  www_dir: "/var/www/loto-stg"
 
 site:
   base_url: "https://www.mizuhobank.co.jp"

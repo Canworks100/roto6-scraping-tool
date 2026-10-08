@@ -1,5 +1,5 @@
 [Unit]
-Description=Loto latest-draw collect for %i (Rakuten)
+Description=Loto latest-draw collect + publish for %i (Rakuten)
 After=network-online.target
 Wants=network-online.target
 OnFailure=loto-collect-alert@%i.service
@@ -10,8 +10,13 @@ User=loto
 Group=loto
 WorkingDirectory=/opt/loto
 Environment=PYTHONPATH=/opt/loto/src
+Environment=SITE_ORIGIN=https://lottery-analytics.com
+Environment=VITE_SITE_ORIGIN=https://lottery-analytics.com
+Environment=LOTO_WWW_DIR=/var/www/loto-stg
+EnvironmentFile=-/etc/vps-backup/discord.env
 EnvironmentFile=-/etc/loto/alert.env
-ExecStart=/opt/loto/.venv/bin/python -m loto6 collect --game %i --latest
+# Discord: DISCORD_WEBHOOK_URL（discord.env）。旧: LOTO_ALERT_WEBHOOK（alert.env）
+ExecStart=/opt/loto/scripts/collect-and-publish.sh %i
 Nice=10
 NoNewPrivileges=true
 PrivateTmp=true

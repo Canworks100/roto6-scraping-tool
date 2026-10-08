@@ -34,6 +34,34 @@ def main(argv: list[str] | None = None) -> int:
     collect_parser.add_argument("--all", action="store_true", help="第1回から最新回まで全件を取り込む")
     collect_parser.add_argument("--refresh", action="store_true", help="取得済みの回も上書きする")
     collect_parser.add_argument("--latest", action="store_true", help="直近数回だけ取り込む（速報用）")
+    collect_parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="DBに変更があったときだけ静的サイトを再ビルドして配信同期する",
+    )
+
+    backfill_parser = sub.add_parser(
+        "backfill-prizes",
+        help="金額が欠けている回だけ楽天月次から1回補完する",
+    )
+    backfill_parser.add_argument(
+        "--game",
+        default="all",
+        choices=["all", "loto6", "loto7", "miniloto"],
+    )
+    backfill_parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="補完で変更があったとき静的サイトを再ビルドする",
+    )
+
+    sub.add_parser("publish-static", help="静的サイトをビルドして LOTO_WWW_DIR へ同期する")
+
+    miss_parser = sub.add_parser(
+        "check-draw-night",
+        help="抽せん日なのに当日番号が無いとき通知して非0終了する",
+    )
+    miss_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
 
     import_parser = sub.add_parser("import-raw", help="data/raw のCSVをデータベースへ入れる")
     import_parser.add_argument("--game", default="loto6", choices=["loto6", "loto7", "miniloto"])
@@ -116,7 +144,72 @@ def main(argv: list[str] | None = None) -> int:
                 f"latest={bool(args.latest)}"
             )
             return 1
+        changed = int((result or {}).get("changed") or 0)
+        if args.publish and changed > 0:
+            try:
+                from loto6.publish import publish_from_config
+
+                publish_from_config(config)
+            except Exception as exc:  # noqa: BLE001
+                alert(f"LOTO静的ビルド失敗 game={args.game}: {exc}")
+                raise
         return 0
+    if args.command == "backfill-prizes":
+        from loto6.games import game_ids
+        from loto6.notify import alert
+        from loto6.rakuten_collect import backfill_missing_prizes
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        total_changed = 0
+        exit_code = 0
+        for game in targets:
+            try:
+                result = backfill_missing_prizes(config, game=game)
+            except Exception as exc:  # noqa: BLE001
+                alert(f"LOTO金額補完失敗 game={game}: {exc}")
+                raise
+            print(
+                f"{game}: filled={result.get('filled')} still_missing={result.get('still_missing')} "
+                f"failed={result.get('failed')} months={result.get('months')}"
+            )
+            total_changed += int(result.get("changed") or 0)
+            if int(result.get("failed") or 0) > 0:
+                exit_code = 1
+        if args.publish and total_changed > 0:
+            try:
+                from loto6.publish import publish_from_config
+
+                publish_from_config(config)
+            except Exception as exc:  # noqa: BLE001
+                alert(f"LOTO静的ビルド失敗（補完後）: {exc}")
+                raise
+        return exit_code
+    if args.command == "publish-static":
+        from loto6.notify import alert
+        from loto6.publish import publish_from_config
+
+        try:
+            publish_from_config(config)
+        except Exception as exc:  # noqa: BLE001
+            alert(f"LOTO静的ビルド失敗: {exc}")
+            raise
+        return 0
+    if args.command == "check-draw-night":
+        from loto6.games import game_ids
+        from loto6.notify import alert
+        from loto6.rakuten_collect import check_draw_night_numbers
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        exit_code = 0
+        for game in targets:
+            ok = check_draw_night_numbers(config, game)
+            if not ok:
+                alert(f"LOTO抽せん日なのに23:00までに番号未取得 game={game}")
+                print(f"MISSING {game}", file=sys.stderr)
+                exit_code = 1
+            else:
+                print(f"OK {game}")
+        return exit_code
     if args.command == "import-raw":
         raw_dir = Path(args.raw_dir) if args.raw_dir else abs_path(config, "storage.raw_dir")
         import_raw(config, raw_dir=raw_dir, refresh=args.refresh, game=args.game)

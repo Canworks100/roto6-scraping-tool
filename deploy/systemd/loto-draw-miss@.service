@@ -1,0 +1,12 @@
+[Unit]
+Description=Alert if draw-night numbers missing for %i by 23:00
+
+[Service]
+Type=oneshot
+User=loto
+Group=loto
+WorkingDirectory=/opt/loto
+Environment=PYTHONPATH=/opt/loto/src
+EnvironmentFile=-/etc/vps-backup/discord.env
+EnvironmentFile=-/etc/loto/alert.env
+ExecStart=/opt/loto/.venv/bin/python -m loto6 check-draw-night --game %i

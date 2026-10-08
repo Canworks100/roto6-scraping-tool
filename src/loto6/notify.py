@@ -1,4 +1,4 @@
-"""収集失敗などの運用通知。Webhook URL は環境変数のみ（リポジトリに書かない）。"""
+"""収集・ビルド失敗などの運用通知。Webhook URL は環境変数のみ（リポジトリに書かない）。"""
 
 from __future__ import annotations
 
@@ -10,21 +10,40 @@ import urllib.request
 
 logger = logging.getLogger("loto6")
 
-ENV_WEBHOOK = "LOTO_ALERT_WEBHOOK"
+# Discord Incoming Webhook（推奨）。サーバーでは /etc/vps-backup/discord.env を EnvironmentFile する。
+ENV_DISCORD = "DISCORD_WEBHOOK_URL"
+# 後方互換（Slack Incoming Webhook 等）
+ENV_LEGACY = "LOTO_ALERT_WEBHOOK"
+
+
+def _webhook_url() -> str:
+    return (os.environ.get(ENV_DISCORD) or os.environ.get(ENV_LEGACY) or "").strip()
+
+
+def _payload_for(url: str, text: str, channel_hint: str) -> dict:
+    body = f"[{channel_hint}] {text}"
+    if "discord.com/api/webhooks" in url or "discordapp.com/api/webhooks" in url:
+        # Discord は content 最大 2000 文字
+        return {"content": body[:1900]}
+    return {"text": body}
 
 
 def alert(text: str, *, channel_hint: str = "#vps-監視") -> bool:
-    """Slack Incoming Webhook 等へ投稿する。未設定ならログのみで False。"""
-    url = (os.environ.get(ENV_WEBHOOK) or "").strip()
-    payload = {"text": f"[{channel_hint}] {text}"}
+    """Discord / Slack Incoming Webhook へ投稿する。未設定ならログのみで False。"""
+    url = _webhook_url()
     if not url:
-        logger.warning("通知スキップ（%s 未設定）: %s", ENV_WEBHOOK, text)
+        logger.warning("通知スキップ（%s / %s 未設定）: %s", ENV_DISCORD, ENV_LEGACY, text)
         return False
+    payload = _payload_for(url, text, channel_hint)
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Discord(Cloudflare) は UA 無しだと 403 になることがある
+            "User-Agent": "LOTO-VPS-Alert/1.0",
+        },
         method="POST",
     )
     try:

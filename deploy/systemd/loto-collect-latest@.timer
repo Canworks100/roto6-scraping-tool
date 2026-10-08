@@ -1,11 +1,10 @@
 [Unit]
-Description=DEPRECATED: use loto-collect-latest-loto6|loto7|miniloto.timer (draw-night once)
-# 残置。新規は種目別 timer を enable すること。
+Description=DEPRECATED template — use per-game timers loto-collect-latest-loto6|loto7|miniloto.timer
 
 [Timer]
-OnCalendar=*-*-* 21:15:00
-Persistent=true
-RandomizedDelaySec=3m
+# 種目別 timer を使う。この template は enable しない。
+OnCalendar=*-*-* 03:18:00
+Persistent=false
 
 [Install]
 WantedBy=timers.target
