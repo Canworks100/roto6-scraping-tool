@@ -229,18 +229,25 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, art
     out = out.replace("</title>", `</title>\n    <link rel="canonical" href="${canon}" />`);
   }
   const ogType = article?.ogType || "website";
-  const imageAbs = article?.image ? loc(article.image) : "";
+  const imageAbs = "https://lottery-analytics.com/og-image.png";
+  const imageAlt = "LOTO アナリティクス";
   const pub = article?.publishedTime || "";
+  // index.html 既定の og/twitter 画像系を外し、ページ単位で入れ直す（重複防止）
+  out = out.replace(/\s*<meta\s+property="og:image(?::(?:width|height|alt))?"\s+content="[^"]*"\s*\/?>/g, "");
+  out = out.replace(/\s*<meta\s+name="twitter:(?:card|image)"\s+content="[^"]*"\s*\/?>/g, "");
   const og = `
     <meta property="og:title" content="${esc(title)}" />
     <meta property="og:description" content="${esc(description)}" />
     <meta property="og:url" content="${canon}" />
     <meta property="og:type" content="${esc(ogType)}" />
     <meta property="og:site_name" content="${SITE}" />
-    ${imageAbs ? `<meta property="og:image" content="${esc(imageAbs)}" />` : ""}
+    <meta property="og:image" content="${esc(imageAbs)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="${esc(imageAlt)}" />
     ${pub ? `<meta property="article:published_time" content="${esc(pub)}" />` : ""}
-    <meta name="twitter:card" content="${imageAbs ? "summary_large_image" : "summary"}" />
-    ${imageAbs ? `<meta name="twitter:image" content="${esc(imageAbs)}" />` : ""}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="${esc(imageAbs)}" />
     <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(description)}" />`;
   out = out.replace("</head>", `${og}\n  </head>`);

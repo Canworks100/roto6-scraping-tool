@@ -1455,12 +1455,6 @@ table.data td.nums {
   background: var(--bg);
 }
 
-.source-credit {
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .flash-actions {
   display: flex;
   flex-wrap: wrap;
