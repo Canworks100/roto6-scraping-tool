@@ -24,18 +24,26 @@ echo "dry_run=${DRY_RUN}"
 mkdir -p "${BACKUP_DIR}"
 
 RSYNC_FLAGS=(-a --delete)
+# VPS 上の /opt/loto・/var/www は loto 所有。canworks は sudo rsync で書く。
+RSYNC_PATH=(--rsync-path="sudo rsync")
+# mkdtemp / ローカル dist の 0700 を配信 root に載せない
+RSYNC_WWW_FLAGS=(-a --delete --chmod=D755,F644)
 SSH=(ssh "${HOST}")
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   RSYNC_FLAGS+=(--dry-run -v)
+  RSYNC_WWW_FLAGS+=(--dry-run -v)
   echo "[dry-run] リモート変更・再起動は行いません"
 fi
 
 echo "==> リモート現状を Backup/ へ取得"
-rsync "${RSYNC_FLAGS[@]}" -e "ssh" \
+rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
   "${HOST}:${REMOTE_WWW}/" "${BACKUP_DIR}/www/" || true
-rsync "${RSYNC_FLAGS[@]}" -e "ssh" \
+rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
   --exclude '.venv' --exclude 'node_modules' --exclude 'apps/web/node_modules' \
   "${HOST}:${REMOTE_APP}/" "${BACKUP_DIR}/app/" || true
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+  "${SSH[@]}" "sudo cp -a ${REMOTE_APP}/data/loto.sqlite ${REMOTE_APP}/data/loto.sqlite.bak-${STAMP} && sudo chown loto:loto ${REMOTE_APP}/data/loto.sqlite.bak-${STAMP}" || true
+fi
 
 echo "==> フロントビルド"
 cd "${ROOT}/apps/web"
@@ -48,18 +56,25 @@ else
 fi
 
 echo "==> アプリ同期"
-rsync "${RSYNC_FLAGS[@]}" -e "ssh" \
+rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
   --exclude '.venv' --exclude 'node_modules' --exclude 'apps/web/node_modules' \
   --exclude 'apps/web/dist' --exclude 'Backup' --exclude '.git' \
   --exclude 'data/*.sqlite' --exclude 'data/*.sqlite-*' \
   "${ROOT}/" "${HOST}:${REMOTE_APP}/"
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+  "${SSH[@]}" "sudo chown -R loto:loto ${REMOTE_APP} && sudo chmod +x ${REMOTE_APP}/scripts/*.sh || true"
+fi
 
 echo "==> 静的配信"
 if [[ "${DRY_RUN}" -eq 0 ]]; then
-  rsync -a --delete -e "ssh" "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/"
-  "${SSH[@]}" "systemctl restart loto-api"
+  rsync "${RSYNC_WWW_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
+    "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/"
+  "${SSH[@]}" "sudo chown -R loto:loto ${REMOTE_WWW}"
+  "${SSH[@]}" "sudo -u www-data test -x ${REMOTE_WWW} && sudo -u www-data test -r ${REMOTE_WWW}/index.html" \
+    || { echo "ERROR: ${REMOTE_WWW} が www-data から読めません"; exit 1; }
+  "${SSH[@]}" "sudo systemctl restart loto-api"
 else
-  rsync "${RSYNC_FLAGS[@]}" -e "ssh" "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/" || \
+  rsync "${RSYNC_WWW_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/" || \
     echo "[dry-run] dist が無い場合はビルド後に再実行"
 fi
 
