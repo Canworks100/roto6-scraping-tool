@@ -224,10 +224,7 @@ export function setSeo(path: string, opts?: SeoOpts) {
   let title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
   let description = HOME_DESC;
 
-  if (opts?.title && opts?.description) {
-    title = opts.title;
-    description = opts.description;
-  } else if (parts.length === 0) {
+  if (parts.length === 0) {
     title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
     description = HOME_DESC;
   } else if (parts[0] === "about") {

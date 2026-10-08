@@ -647,15 +647,24 @@ for (const game of GAMES) {
     urls.push(path);
   }
 
+  const guideDesc = {
+    "how-to-buy": (l) =>
+      `${l}の買い方の案内です。売り場での購入のほか、本サイトでできることとできないことをまとめています。`,
+    odds: (l) =>
+      `${l}の当せん確率について。抽せんは回ごとに独立で、過去の出目は次の確率を変えません。`,
+    faq: (l) =>
+      `${l}についてよくある質問。最新結果の見方や予想の扱い、公式結果との違いをまとめています。`,
+  };
   for (const g of GUIDE_SLUGS) {
     const path = `/${game.id}/guide/${g.slug}`;
     const body = `<article class="legal"><h1>${game.label} ${g.title}</h1>
       <p>${game.label}の${g.title}についての案内です。正式な購入方法・確率は宝くじ公式の案内をご確認ください。</p>
       <p><a href="/${game.id}">${game.label}トップ</a>　<a href="/disclaimer">免責事項</a></p></article>`;
+    const descFn = guideDesc[g.slug];
     writePage(
       path.slice(1),
       `${game.label} ${g.title}｜${SITE}`,
-      `${game.label}の${g.title}についてまとめています。`,
+      descFn ? descFn(game.label) : `${game.label}のガイドです。`,
       body,
     );
     urls.push(path);
@@ -744,7 +753,7 @@ for (const game of GAMES) {
 writePage(
   "404",
   `ページが見つかりません｜${SITE}`,
-  "お探しのページは見つかりませんでした。",
+  "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。",
   `<div class="box"><h1>ページが見つかりません</h1><p><a href="/">トップへ</a></p></div>`,
 );
 
