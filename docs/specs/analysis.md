@@ -53,7 +53,7 @@
 | `/{game}/pairs` | 同時出現 | 2個・3個 |
 | `/{game}/shape` | 構成 | 奇偶、合計、連番、下一桁、幅、帯、曜日 |
 | `/{game}/grid` | 出目表 | 直近N回の数字マス |
-| `/{game}/follow` | 前後 | 前回重なり、出た直後の次の回 |
+| `/{game}/follow` | 前回含む | 含む／含まない、2連続・3連続、数字別 |
 | `/{game}/n/{nn}` | （ナビなし） | 1数字の回数・一緒に出た数字・出た回 |
 
 `/freq` の旧「出現回数」は拡張して残す。`/trends` は `/freq` へリダイレクト（既存どおり）。
@@ -214,15 +214,20 @@ PC・スマホとも期間切替は横スクロールしないボタン列。表
 
 列の上に数字を置き、狭い画面では横スクロール。
 
-### 6. 前後
+### 6. 前回の当選番号を含む回数
 
 経路: `/{game}/follow`
 
-**前回との重なり**  
-本数字集合の積集合の個数（0 〜 本数字個数）の回数と割合。第1回は対象から除き、母数は開催−1（期間内で「直前の回」が期間内にある組だけを数える）。
+ボーナスは見ない。第1回は「前回」がないので全体回数の対象外（割合の分母は期間内の開催数）。
 
-**出た直後**  
-数字Aが本数字に出た回の、次の回の本数字に出た数字Bの回数。表は「数字A（行）× よく出たB 上位5」。件数が0の行は出さない。母数は「Aが出て、かつ次の回が期間内にある」回数。行の数字は `/{game}/n/{nn}` へ。
+**全体**  
+- 含まない／含む: 直前の回と本数字が1個でも重なるか  
+- 2連続: 前回と今回に同じ数字があり、前々回にはない（前々回が無い組は含む側を2連続に数える）  
+- 3連続: 前々回・前回・今回の3回に同じ数字がある  
+含む／2連続／3連続は互いに排他ではない（回単位）。
+
+**数字ごと**  
+その数字が出た回について、前回に出ない／前回にも出る／率／2連続／3連続。2連続＋3連続＝前回にも出る。行の数字は `/{game}/n/{nn}` へ。
 
 ### 7. 数字ページ
 
@@ -276,8 +281,9 @@ shape.span              // summary + {span, draws}[]
 shape.bands             // {id, label, min, max, count}[]  3分割と6分割
 shape.band_mix          // 1回あたり低中高の平均個数
 shape.weekday           // {weekday: 0-6, draws}[]  0=月
-follow.overlap          // {match_count, draws, rate}[]
-follow.next_top         // {number, sample, next: {number, count}[] }[]
+follow.summary          // {key: none|any|streak2|streak3, draws, rate}[]
+follow.by_number        // {number, without_prev, with_prev, with_prev_rate, streak2, streak3}[]
+follow.highlights       // with_prev_high / streak2_high / rate_high / rate_low
 ```
 
 出目表は集計しない。`GET /api/{game}/history?limit=&offset=0` を流用する。ハイライトはフロントで計算する。

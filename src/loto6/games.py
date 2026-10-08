@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 GAME_IDS = ("loto6", "loto7", "miniloto")
+
+# 通常の抽せん曜日（0=月 … 6=日）。祝日振替は扱わない。
+DRAW_WEEKDAYS: dict[str, tuple[int, ...]] = {
+    "loto6": (0, 3),
+    "loto7": (4,),
+    "miniloto": (1,),
+}
+
+
+def next_draw_date(game: str, last_draw_date: str) -> str:
+    """直前の抽せん日の翌日から、次の通常抽せん日を返す（ISO日付）。"""
+    start = date.fromisoformat(str(last_draw_date)[:10])
+    weekdays = DRAW_WEEKDAYS.get(game)
+    if not weekdays:
+        raise ValueError(f"未知の種目です: {game}")
+    for offset in range(1, 15):
+        candidate = start + timedelta(days=offset)
+        if candidate.weekday() in weekdays:
+            return candidate.isoformat()
+    raise ValueError("次の抽せん日を算出できません")
 
 
 def game_ids(config: dict[str, Any]) -> list[str]:

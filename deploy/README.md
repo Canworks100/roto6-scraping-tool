@@ -13,8 +13,14 @@
 1. 非 root ユーザー `loto` を作成し、リポジトリを `/opt/loto` に配置
 2. `python3 -m venv /opt/loto/.venv` → `pip install -r requirements.txt -r apps/api/requirements.txt`
 3. `python -m loto6 migrate-legacy`（既存がある場合）→ 各種目 `collect --all` → `python -m loto6 flash-articles`（速報記事の一括自動生成）
-4. `cd apps/web && npm ci && npm run build` → `dist` を `/var/www/loto/` へ
-5. 本ディレクトリの `systemd/*.service` / `*.timer` と `nginx/loto.conf` を配置
+4. `cd apps/web && npm ci` → 本番ビルドはオリジンを付けて実行（canonical / sitemap / robots 用）
+   ```bash
+   export SITE_ORIGIN=https://example.com
+   export VITE_SITE_ORIGIN=https://example.com
+   npm run build
+   ```
+   `dist` を `/var/www/loto/` へ。ステージングは `nginx/loto-staging.conf` を使い、`robots.staging.txt` 相当（Disallow: /）と `X-Robots-Tag: noindex, nofollow` を付ける。本番の `robots.txt` / `sitemap.xml` をステージングへコピーしない。
+5. 本ディレクトリの `systemd/*.service` / `*.timer` と `nginx/loto.conf`（本番）を配置
    ```bash
    sudo cp deploy/systemd/loto-api.service /etc/systemd/system/
    sudo cp deploy/systemd/loto-collect@.service /etc/systemd/system/

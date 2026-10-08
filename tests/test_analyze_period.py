@@ -61,6 +61,11 @@ class PeriodAnalyzeTest(unittest.TestCase):
         payload = to_payload(result, "all")
         self.assertEqual(payload["period"], "all")
         self.assertEqual(payload["meta"]["draw_count"], 2)
-        self.assertEqual(sum(item["draws"] for item in payload["follow"]["overlap"]), 1)
+        summary = {item["key"]: item["draws"] for item in payload["follow"]["summary"]}
+        self.assertEqual(summary["any"] + summary["none"], 1)
+        self.assertEqual(summary["any"], 1)
+        by1 = next(r for r in payload["follow"]["by_number"] if r["number"] == 1)
+        self.assertEqual(by1["with_prev"], 1)
+        self.assertEqual(by1["streak2"], 1)
         store.close()
         path.unlink(missing_ok=True)

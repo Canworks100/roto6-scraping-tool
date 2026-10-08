@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -28,8 +28,9 @@ from loto6.analyze import (  # noqa: E402
     to_payload,
 )
 from loto6.config import abs_path, load_config  # noqa: E402
+from loto6.eyecatch import eyecatch_svg  # noqa: E402
 from loto6.flash_article import article_or_build, list_articles  # noqa: E402
-from loto6.games import get_game, public_game_list  # noqa: E402
+from loto6.games import get_game, next_draw_date, public_game_list  # noqa: E402
 from loto6.generate import generate_combos  # noqa: E402
 from loto6.storage import Store, row_to_draw  # noqa: E402
 
@@ -216,7 +217,12 @@ def trends(
     }
     latest_row = store.latest_draw(game)
     latest = None if latest_row is None else row_to_draw(latest_row, int(g["main_count"]))
-    ranks = store.prize_amount_rankings(game, int(g["main_count"]))
+    rank_start = None
+    if key.startswith("years"):
+        from loto6.analyze import years_ago
+
+        rank_start = years_ago(int(key.replace("years", "")))
+    ranks = store.prize_amount_rankings(game, int(g["main_count"]), start_date=rank_start)
     if not rows:
         return {
             "error": "分析できる当せんデータがありません",
@@ -360,6 +366,7 @@ def week_pick(game: str, store: Annotated[Store, Depends(get_store)]) -> dict[st
         "label": g["label"],
         "latest": latest,
         "next_draw_no": last_no + 1,
+        "next_draw_date": next_draw_date(game, str(latest["draw_date"])),
         "next": nxt,
         "previous": previous,
         "matched": matched,
@@ -400,6 +407,34 @@ def article_detail(
     if article is None:
         raise HTTPException(status_code=404, detail="記事がありません")
     return article
+
+
+@app.get("/api/{game}/articles/{draw_no}/eyecatch.svg")
+def article_eyecatch(
+    game: str,
+    draw_no: int,
+    store: Annotated[Store, Depends(get_store)],
+) -> Response:
+    g = parse_game(game)
+    if draw_no < 1:
+        raise HTTPException(status_code=404, detail="記事がありません")
+    row = store.get_draw(game, draw_no)
+    if row is None:
+        raise HTTPException(status_code=404, detail="記事がありません")
+    item = row_to_draw(row, int(g["main_count"]))
+    svg = eyecatch_svg(
+        label=str(g["label"]),
+        draw_no=draw_no,
+        draw_date=str(item.get("draw_date") or ""),
+        numbers=list(item["numbers"]),
+        bonus=None if item.get("bonus") is None else int(item["bonus"]),
+        bonus2=None if item.get("bonus2") is None else int(item["bonus2"]),
+    )
+    return Response(
+        content=svg,
+        media_type="image/svg+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600, must-revalidate"},
+    )
 
 
 @app.post("/api/{game}/generate")

@@ -17,8 +17,10 @@ PERIODS: dict[str, str] = {
     "draws50": "直近50回",
     "draws100": "直近100回",
     "draws500": "直近500回",
-    "years5": "直近5年",
-    "years10": "直近10年",
+    "years1": "過去1年",
+    "years3": "過去3年",
+    "years5": "過去5年",
+    "years10": "過去10年",
 }
 
 BANDS_3: dict[str, list[tuple[str, int, int]]] = {
@@ -113,7 +115,7 @@ def analyze(rows: list[sqlite3.Row], config: dict[str, Any]) -> dict[str, Any]:
         "sums": sums,
         "draws": frame,
         "shape": _shape(frame, number_frame, draw_count, main_count, min_number, max_number, game_id),
-        "follow": _follow(frame, main_count),
+        "follow": _follow(frame, main_count, min_number, max_number),
         "main_count": main_count,
         "min_number": min_number,
         "max_number": max_number,
@@ -613,38 +615,93 @@ def _six_bands(min_number: int, max_number: int) -> list[tuple[int, int]]:
     return _split_range(min_number, max_number, 6)
 
 
-def _follow(frame: pd.DataFrame, main_count: int) -> dict[str, Any]:
+def _follow(
+    frame: pd.DataFrame, main_count: int, min_number: int, max_number: int
+) -> dict[str, Any]:
+    """前回の本数字が今回にも出たか（含む／2連続／3連続）。ボーナスは見ない。"""
     ordered = frame.sort_values("draw_no")
-    sets = []
-    for row in ordered.itertuples(index=False):
-        sets.append(set(_mains(row, main_count)))
-    overlap_counts = {i: 0 for i in range(main_count + 1)}
-    pairs = 0
-    next_map: dict[int, dict[int, int]] = {}
-    sample: dict[int, int] = {}
-    for prev, nxt in zip(sets, sets[1:]):
-        pairs += 1
-        match = len(prev & nxt)
-        overlap_counts[match] = overlap_counts.get(match, 0) + 1
-        for a in prev:
-            sample[a] = sample.get(a, 0) + 1
-            dest = next_map.setdefault(a, {})
-            for b in nxt:
-                dest[b] = dest.get(b, 0) + 1
-    overlap = [
-        {"match_count": k, "draws": v, "rate": v / pairs if pairs else 0} for k, v in overlap_counts.items()
+    sets = [set(_mains(row, main_count)) for row in ordered.itertuples(index=False)]
+    n_draws = len(sets)
+    numbers = list(range(min_number, max_number + 1))
+
+    none_count = 0
+    any_count = 0
+    streak2_draws = 0
+    streak3_draws = 0
+    without_prev = {n: 0 for n in numbers}
+    with_prev = {n: 0 for n in numbers}
+    streak2 = {n: 0 for n in numbers}
+    streak3 = {n: 0 for n in numbers}
+
+    for i in range(1, n_draws):
+        prev = sets[i - 1]
+        curr = sets[i]
+        inter = prev & curr
+        if inter:
+            any_count += 1
+        else:
+            none_count += 1
+        prevprev = sets[i - 2] if i >= 2 else None
+        if prevprev is None:
+            if inter:
+                streak2_draws += 1
+        else:
+            if inter - prevprev:
+                streak2_draws += 1
+            if inter & prevprev:
+                streak3_draws += 1
+        for n in curr:
+            if n in prev:
+                with_prev[n] += 1
+                if prevprev is not None and n in prevprev:
+                    streak3[n] += 1
+                else:
+                    streak2[n] += 1
+            else:
+                without_prev[n] += 1
+
+    denom = float(n_draws) if n_draws else 0.0
+
+    def _rate(count: int) -> float:
+        return count / denom if denom else 0.0
+
+    summary = [
+        {"key": "none", "draws": none_count, "rate": _rate(none_count)},
+        {"key": "any", "draws": any_count, "rate": _rate(any_count)},
+        {"key": "streak2", "draws": streak2_draws, "rate": _rate(streak2_draws)},
+        {"key": "streak3", "draws": streak3_draws, "rate": _rate(streak3_draws)},
     ]
-    next_top = []
-    for number, dest in sorted(next_map.items()):
-        top = sorted(dest.items(), key=lambda item: (-item[1], item[0]))[:5]
-        next_top.append(
+    by_number = []
+    for n in numbers:
+        w = with_prev[n]
+        wo = without_prev[n]
+        appeared = w + wo
+        by_number.append(
             {
-                "number": number,
-                "sample": sample.get(number, 0),
-                "next": [{"number": n, "count": c} for n, c in top],
+                "number": n,
+                "without_prev": wo,
+                "with_prev": w,
+                "with_prev_rate": (w / appeared) if appeared else 0.0,
+                "streak2": streak2[n],
+                "streak3": streak3[n],
             }
         )
-    return {"overlap": overlap, "next_top": next_top}
+
+    def _top(rows: list[dict[str, Any]], key: str, *, reverse: bool = True, limit: int = 5) -> list[dict[str, Any]]:
+        ranked = sorted(rows, key=lambda r: (-r[key] if reverse else r[key], r["number"]))
+        out = []
+        for r in ranked[:limit]:
+            out.append({"number": r["number"], "value": r[key]})
+        return out
+
+    appeared_rows = [r for r in by_number if r["without_prev"] + r["with_prev"] > 0]
+    highlights = {
+        "with_prev_high": _top(appeared_rows, "with_prev"),
+        "streak2_high": _top(appeared_rows, "streak2"),
+        "rate_high": _top(appeared_rows, "with_prev_rate"),
+        "rate_low": _top(appeared_rows, "with_prev_rate", reverse=False),
+    }
+    return {"summary": summary, "by_number": by_number, "highlights": highlights}
 
 
 def theoretical_prizes(universe: int, main_count: int, bonus_count: int, grades: int) -> list[dict[str, Any]]:
@@ -673,6 +730,25 @@ def theoretical_prizes(universe: int, main_count: int, bonus_count: int, grades:
             }
         )
     return items
+
+
+def ticket_grade(
+    picked: set[int],
+    mains: set[int],
+    bonuses: set[int],
+    main_count: int,
+) -> tuple[int | None, int, bool]:
+    hit = len(picked & mains)
+    bonus_hit = bool(picked & bonuses)
+    if hit == main_count:
+        return 1, hit, bonus_hit
+    if hit == main_count - 1 and bonus_hit:
+        return 2, hit, True
+    if hit == main_count - 1:
+        return 3, hit, False
+    if hit >= 3:
+        return (main_count - hit) + 2, hit, bonus_hit
+    return None, hit, bonus_hit
 
 
 def combo_payload(
@@ -728,8 +804,13 @@ def combo_payload(
     sum_acc = 0
     exact: list[dict[str, Any]] = []
     samples: list[dict[str, Any]] = []
+    hits: list[dict[str, Any]] = []
+    prize1_amounts: list[int] = []
     for row in rows:
         data = dict(row)
+        p1_raw = data.get("prize1_amount")
+        if p1_raw is not None:
+            prize1_amounts.append(int(p1_raw))
         mains = []
         for index in range(1, main_count + 1):
             value = data.get(f"n{index}")
@@ -760,7 +841,15 @@ def combo_payload(
             same_sum_bin += 1
         sum_acc += draw_sum
         if hit == main_count:
-            exact.append({"draw_no": draw_no, "draw_date": draw_date, "match_count": hit})
+            p1 = data.get("prize1_amount")
+            exact.append(
+                {
+                    "draw_no": draw_no,
+                    "draw_date": draw_date,
+                    "match_count": hit,
+                    "prize1_amount": None if p1 is None else int(p1),
+                }
+            )
         if hit >= 3:
             samples.append(
                 {
@@ -768,6 +857,28 @@ def combo_payload(
                     "draw_date": draw_date,
                     "match_count": hit,
                     "numbers": sorted_mains,
+                }
+            )
+        bonuses = []
+        if data.get("bonus") is not None:
+            bonuses.append(int(data["bonus"]))
+        if data.get("bonus2") is not None:
+            bonuses.append(int(data["bonus2"]))
+        grade, _, bonus_hit = ticket_grade(picked_set, main_set, set(bonuses), main_count)
+        if grade is not None:
+            amount_raw = data.get(f"prize{grade}_amount")
+            amount = None if amount_raw is None else int(amount_raw)
+            hits.append(
+                {
+                    "draw_no": draw_no,
+                    "draw_date": draw_date,
+                    "grade": grade,
+                    "match_count": hit,
+                    "bonus_hit": bonus_hit,
+                    "numbers": sorted_mains,
+                    "bonus": bonuses[0] if bonuses else None,
+                    "bonus2": bonuses[1] if len(bonuses) > 1 else None,
+                    "amount": amount,
                 }
             )
     numbers_out = []
@@ -786,6 +897,28 @@ def combo_payload(
         )
     exact.sort(key=lambda item: -int(item["draw_no"]))
     samples.sort(key=lambda item: -int(item["draw_no"]))
+    hits.sort(key=lambda item: -int(item["draw_no"]))
+    unit_price = {"loto6": 200, "loto7": 300, "miniloto": 200}.get(game_id, 200)
+    by_grade_map: dict[int, dict[str, int]] = {}
+    prize_total = 0
+    unknown_amount = 0
+    for item in hits:
+        g = int(item["grade"])
+        row = by_grade_map.setdefault(g, {"grade": g, "draws": 0, "amount": 0})
+        row["draws"] += 1
+        if item["amount"] is None:
+            unknown_amount += 1
+        else:
+            prize_total += int(item["amount"])
+            row["amount"] += int(item["amount"])
+    whatif = {
+        "hit_count": len(hits),
+        "prize_total": prize_total,
+        "unknown_amount": unknown_amount,
+        "unit_price": unit_price,
+        "cost": draw_count * unit_price,
+        "by_grade": [by_grade_map[g] for g in sorted(by_grade_map)],
+    }
     mean_sum = sum_acc / draw_count if draw_count else 0
     shape = {
         "even_count": even,
@@ -809,11 +942,33 @@ def combo_payload(
         "exact_count": len(exact),
         "exact": exact[:20],
         "samples": samples[:20],
+        "hits": hits,
+        "whatif": whatif,
         "numbers_stats": numbers_out,
         "shape": shape,
-        "diagnosis": _combo_diagnosis(draw_count, shape, numbers_out, main_count),
+        "diagnosis": _combo_diagnosis(
+            draw_count,
+            shape,
+            numbers_out,
+            main_count,
+            exact=exact,
+            prize1_amounts=prize1_amounts,
+        ),
         "meta": {"draw_count": draw_count, "period": period},
     }
+
+
+def _point_row(label: str, score: int, tone: str, text: str) -> dict[str, Any]:
+    return {"label": label, "score": score, "max": 20, "tone": tone, "text": text}
+
+
+def _high_prize1_threshold(amounts: list[int]) -> int | None:
+    """1等金額の上位約25%境界。比較は超え（より高い）で判定する。"""
+    if len(amounts) < 4:
+        return None
+    ordered = sorted(amounts)
+    idx = (len(ordered) * 3) // 4
+    return ordered[idx]
 
 
 def _combo_diagnosis(
@@ -821,9 +976,12 @@ def _combo_diagnosis(
     shape: dict[str, Any],
     numbers_stats: list[dict[str, Any]],
     main_count: int,
+    *,
+    exact: list[dict[str, Any]] | None = None,
+    prize1_amounts: list[int] | None = None,
 ) -> dict[str, Any]:
-    points: list[dict[str, str]] = []
-    score = 0
+    """5項目×最大20点＋特殊点（既出・高額既出の減点）。"""
+    points: list[dict[str, Any]] = []
     even = int(shape["even_count"])
     odd = int(shape["odd_count"])
     same_odd = int(shape["same_odd_even_draws"])
@@ -834,31 +992,31 @@ def _combo_diagnosis(
         even_ok = abs(even - odd) <= 1
         even_near = abs(even - odd) == 3
     if even_ok:
-        score += 22
         points.append(
-            {
-                "label": "奇数偶数",
-                "tone": "good",
-                "text": f"偶数{even}個・奇数{odd}個。過去{same_odd}回と同じ形です。",
-            }
+            _point_row(
+                "奇数偶数",
+                20,
+                "good",
+                f"偶数{even}個・奇数{odd}個。過去{same_odd}回と同じ形です。",
+            )
         )
     elif even_near:
-        score += 14
         points.append(
-            {
-                "label": "奇数偶数",
-                "tone": "ok",
-                "text": f"偶数{even}個・奇数{odd}個。少し偏っています。過去{same_odd}回です。",
-            }
+            _point_row(
+                "奇数偶数",
+                12,
+                "ok",
+                f"偶数{even}個・奇数{odd}個。少し偏っています。過去{same_odd}回です。",
+            )
         )
     else:
-        score += 6
         points.append(
-            {
-                "label": "奇数偶数",
-                "tone": "off",
-                "text": f"偶数{even}個・奇数{odd}個。偏りが強めです。過去{same_odd}回です。",
-            }
+            _point_row(
+                "奇数偶数",
+                4,
+                "off",
+                f"偶数{even}個・奇数{odd}個。偏りが強めです。過去{same_odd}回です。",
+            )
         )
 
     total_sum = int(shape["sum"])
@@ -867,108 +1025,142 @@ def _combo_diagnosis(
     same_sum = int(shape["same_sum_bin_draws"])
     diff = abs(total_sum - mean_sum) if mean_sum else 0
     if mean_sum and diff <= 15:
-        score += 22
         points.append(
-            {
-                "label": "合計",
-                "tone": "good",
-                "text": f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}の近くです。過去{same_sum}回。",
-            }
+            _point_row(
+                "合計",
+                20,
+                "good",
+                f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}の近くです。過去{same_sum}回。",
+            )
         )
     elif mean_sum and diff <= 35:
-        score += 14
         points.append(
-            {
-                "label": "合計",
-                "tone": "ok",
-                "text": f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}からやや離れています。過去{same_sum}回。",
-            }
+            _point_row(
+                "合計",
+                12,
+                "ok",
+                f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}からやや離れています。過去{same_sum}回。",
+            )
         )
     else:
-        score += 6
         points.append(
-            {
-                "label": "合計",
-                "tone": "off",
-                "text": f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}から離れています。過去{same_sum}回。",
-            }
+            _point_row(
+                "合計",
+                4,
+                "off",
+                f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}から離れています。過去{same_sum}回。",
+            )
         )
 
     adjacent = int(shape["adjacent_count"])
     same_adj = int(shape["same_adjacent_draws"])
     if adjacent <= 1:
-        score += 18
         points.append(
-            {
-                "label": "連番",
-                "tone": "good",
-                "text": f"連番{adjacent}組。並びは落ち着いています。過去{same_adj}回。",
-            }
+            _point_row(
+                "連番",
+                20,
+                "good",
+                f"連番{adjacent}組。並びは落ち着いています。過去{same_adj}回。",
+            )
         )
     elif adjacent == 2:
-        score += 12
         points.append(
-            {
-                "label": "連番",
-                "tone": "ok",
-                "text": f"連番{adjacent}組。やや多めです。過去{same_adj}回。",
-            }
+            _point_row(
+                "連番",
+                12,
+                "ok",
+                f"連番{adjacent}組。やや多めです。過去{same_adj}回。",
+            )
         )
     else:
-        score += 5
         points.append(
-            {
-                "label": "連番",
-                "tone": "off",
-                "text": f"連番{adjacent}組。連なりが強い並びです。過去{same_adj}回。",
-            }
+            _point_row(
+                "連番",
+                4,
+                "off",
+                f"連番{adjacent}組。連なりが強い並びです。過去{same_adj}回。",
+            )
         )
 
     bands = list(shape["bands"])
     used = sum(1 for b in bands if int(b["count"]) > 0)
     band_line = "、".join(f"{b['label']}{b['count']}個" for b in bands)
     if used >= 3:
-        score += 18
-        points.append({"label": "番号帯", "tone": "good", "text": f"低・中・高に分かれています。{band_line}。"})
+        points.append(_point_row("番号帯", 20, "good", f"低・中・高に分かれています。{band_line}。"))
     elif used == 2:
-        score += 12
-        points.append({"label": "番号帯", "tone": "ok", "text": f"帯が二つに寄っています。{band_line}。"})
+        points.append(_point_row("番号帯", 12, "ok", f"帯が二つに寄っています。{band_line}。"))
     else:
-        score += 5
-        points.append({"label": "番号帯", "tone": "off", "text": f"帯が一方向に寄っています。{band_line}。"})
+        points.append(_point_row("番号帯", 4, "off", f"帯が一方向に寄っています。{band_line}。"))
 
     hot = sum(1 for s in numbers_stats if int(s["vs_expected"]) >= 0)
     cold = len(numbers_stats) - hot
     if hot and cold:
-        score += 20
         points.append(
-            {
-                "label": "出現",
-                "tone": "good",
-                "text": f"出現の多い数字が{hot}個、控えめが{cold}個です。",
-            }
+            _point_row(
+                "出現",
+                20,
+                "good",
+                f"出現の多い数字が{hot}個、控えめが{cold}個です。",
+            )
         )
     elif hot:
-        score += 8
-        points.append({"label": "出現", "tone": "ok", "text": "選んだ数字はいずれも出現が多めです。"})
+        points.append(_point_row("出現", 10, "ok", "選んだ数字はいずれも出現が多めです。"))
     else:
-        score += 8
-        points.append({"label": "出現", "tone": "ok", "text": "選んだ数字はいずれも出現が控えめです。"})
+        points.append(_point_row("出現", 10, "ok", "選んだ数字はいずれも出現が控えめです。"))
 
-    score = min(100, int(score))
-    if score >= 80:
-        verdict = "いい感じ"
-        summary = "過去によく出る形に寄った並びです。"
-    elif score >= 66:
-        verdict = "バランスがよい"
-        summary = "奇偶・帯の偏りが小さく、合計か連番に個性が出ています。"
-    elif score >= 50:
-        verdict = "標準的"
-        summary = "よくある形と、少し寄ったところが混ざっています。"
-    elif score >= 36:
-        verdict = "やや偏っている"
-        summary = "合計や連番、帯のどれかが強く寄っています。"
+    base_score = sum(int(p["score"]) for p in points)
+    special: list[dict[str, Any]] = []
+    exact_rows = exact or []
+    exact_count = len(exact_rows)
+    if exact_count > 0:
+        special.append(
+            {
+                "label": "既出組合せ",
+                "score": -20,
+                "tone": "off",
+                "text": f"同じ組合せが過去に{exact_count}回あります。同じ並びは二度とこない前提で減点します。",
+            }
+        )
+        threshold = _high_prize1_threshold(prize1_amounts or [])
+        high_hits = []
+        for row in exact_rows:
+            amount = row.get("prize1_amount")
+            if amount is None or threshold is None:
+                continue
+            if int(amount) > int(threshold):
+                high_hits.append(row)
+        if high_hits:
+            shown = "、".join(
+                f"第{int(h['draw_no'])}回（{int(h['prize1_amount']):,}円）" for h in high_hits[:3]
+            )
+            special.append(
+                {
+                    "label": "高額既出",
+                    "score": -20,
+                    "tone": "off",
+                    "text": f"過去の同一組合せで高額の1等が出ています。{shown}。",
+                }
+            )
+
+    special_score = sum(int(s["score"]) for s in special)
+    score = max(0, min(100, base_score + special_score))
+    verdict = f"{score}点"
+    if special_score < 0:
+        summary = f"基本{base_score}点、特殊{special_score}点。合計{score}点です。"
+    elif base_score >= 80:
+        summary = "奇偶・合計・連番・帯・出現のバランスが寄った並びです。"
+    elif base_score >= 60:
+        summary = "形はおおむね整っています。一部に寄りがあります。"
+    elif base_score >= 40:
+        summary = "よくある形と、寄ったところが混ざっています。"
     else:
-        verdict = "個性の強い並び"
-        summary = "過去では少なめの形です。"
-    return {"verdict": verdict, "score": score, "summary": summary, "points": points}
+        summary = "過去では少なめの形に寄っています。"
+    return {
+        "verdict": verdict,
+        "score": score,
+        "base_score": base_score,
+        "special_score": special_score,
+        "summary": summary,
+        "points": points,
+        "special": special,
+    }

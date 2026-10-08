@@ -78,7 +78,7 @@ export type ComboPayload = {
   prizes: { grade: number; ways: number; total: number; one_in: number | null }[];
   match_hist: { match_count: number; draws: number }[];
   exact_count: number;
-  exact: { draw_no: number; draw_date: string; match_count: number }[];
+  exact: { draw_no: number; draw_date: string; match_count: number; prize1_amount?: number | null }[];
   samples: { draw_no: number; draw_date: string; match_count: number; numbers: number[] }[];
   numbers_stats: {
     number: number;
@@ -104,9 +104,33 @@ export type ComboPayload = {
   diagnosis?: {
     verdict: string;
     score: number;
+    base_score?: number;
+    special_score?: number;
     summary: string;
-    points: { label: string; tone: string; text: string }[];
+    points: { label: string; score?: number; max?: number; tone: string; text: string }[];
+    special?: { label: string; score: number; tone: string; text: string }[];
   };
+  hits?: ComboHit[];
+  whatif?: {
+    hit_count: number;
+    prize_total: number;
+    unknown_amount: number;
+    unit_price: number;
+    cost: number;
+    by_grade: { grade: number; draws: number; amount: number }[];
+  };
+};
+
+export type ComboHit = {
+  draw_no: number;
+  draw_date: string;
+  grade: number;
+  match_count: number;
+  bonus_hit: boolean;
+  numbers: number[];
+  bonus: number | null;
+  bonus2: number | null;
+  amount: number | null;
 };
 
 export function combo(game: string, numbers: number[], period = "all") {
@@ -193,8 +217,21 @@ export type TrendsPayload = {
     weekday: { weekday: number; draws: number }[];
   };
   follow?: {
-    overlap: { match_count: number; draws: number; rate: number }[];
-    next_top: { number: number; sample: number; next: { number: number; count: number }[] }[];
+    summary: { key: string; draws: number; rate: number }[];
+    by_number: {
+      number: number;
+      without_prev: number;
+      with_prev: number;
+      with_prev_rate: number;
+      streak2: number;
+      streak3: number;
+    }[];
+    highlights: {
+      with_prev_high: { number: number; value: number }[];
+      streak2_high: { number: number; value: number }[];
+      rate_high: { number: number; value: number }[];
+      rate_low: { number: number; value: number }[];
+    };
   };
   summary_text?: string;
   error?: string;
@@ -263,6 +300,7 @@ export type WeekPick = {
   label: string;
   latest: DrawItem;
   next_draw_no: number;
+  next_draw_date: string;
   next: number[];
   previous: number[];
   matched: number[];

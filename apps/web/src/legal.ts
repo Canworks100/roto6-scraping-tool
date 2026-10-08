@@ -18,12 +18,17 @@ export function legalTitle(id: LegalId): string {
 }
 
 export function legalHtml(id: LegalId): string {
-  return `<article class="legal"><h2>${TITLES[id]}</h2>${BODIES[id]}</article>`;
+  return `<article class="legal"><h1>${TITLES[id]}</h1>${BODIES[id]}</article>`;
+}
+
+/** prerender 用に本文HTMLだけ返す */
+export function legalBody(id: LegalId): string {
+  return BODIES[id];
 }
 
 const BODIES: Record<LegalId, string> = {
   about: `
-    <p>LOTOデータベースは、ロト6・ロト7・ミニロトの予想と、過去の当せん番号の確認ができるサイトです。</p>
+    <p>LOTO アナリティクスは、ロト6・ロト7・ミニロトの予想と、過去の当せん番号の確認ができるサイトです。</p>
     <p>掲載している番号・口数・金額は、公表されている抽せん結果を整理したものです。</p>
     <p>各種目のページから、予想、最新結果、速報、結果一覧、出現回数、金額ランキング、数字検索、組合診断を利用できます。</p>
   `,
@@ -38,7 +43,6 @@ const BODIES: Record<LegalId, string> = {
     <p>数字検索の登録数字は、ブラウザのCookie（loto_fav）に保存します。会員情報としては扱いません。保存期間は最大400日で、ブラウザ側でCookieを削除すると消えます。</p>
     <p>サーバーの運用上、アクセス日時やIPアドレスなどが記録されることがあります。これらは障害対応と不正利用の防止に限り使用します。</p>
     <p>広告やアクセス解析を導入する場合は、本ページの内容を更新します。</p>
-    <p>お問い合わせで連絡先をお預かりしたときは、返信の目的に限って利用し、目的達成後は速やかに削除します。</p>
   `,
   terms: `
     <p>本サイトを利用した時点で、本規約に同意したものとみなします。</p>

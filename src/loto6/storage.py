@@ -433,9 +433,20 @@ class Store:
             self.conn.execute("SELECT COUNT(*) AS c FROM flash_articles WHERE game=?", (game,)).fetchone()["c"]
         )
 
-    def prize_amount_rankings(self, game: str, main_count: int, limit: int = 5) -> dict:
+    def prize_amount_rankings(
+        self,
+        game: str,
+        main_count: int,
+        limit: int = 5,
+        start_date: str | None = None,
+    ) -> dict:
         """当せん金額がある回だけを対象に、1〜3等の上位・下位を返す。同額は1つの順位にまとめる。"""
         result: dict[str, dict[str, list[dict]]] = {}
+        date_sql = ""
+        date_params: list[object] = []
+        if start_date:
+            date_sql = " AND draw_date >= ?"
+            date_params = [start_date]
         for grade in (1, 2, 3):
             amount_col = f"prize{grade}_amount"
             count_col = f"prize{grade}_count"
@@ -445,12 +456,12 @@ class Store:
                     f"""
                     SELECT {amount_col} AS amount, COUNT(*) AS n
                     FROM draws
-                    WHERE game=? AND {amount_col} IS NOT NULL AND {amount_col} > 0
+                    WHERE game=? AND {amount_col} IS NOT NULL AND {amount_col} > 0{date_sql}
                     GROUP BY {amount_col}
                     ORDER BY amount {order}
                     LIMIT ?
                     """,
-                    (game, limit),
+                    (game, *date_params, limit),
                 ).fetchall()
                 groups = []
                 for index, amount_row in enumerate(amount_rows, 1):
@@ -458,10 +469,10 @@ class Store:
                     rows = self.conn.execute(
                         f"""
                         SELECT * FROM draws
-                        WHERE game=? AND {amount_col}=?
+                        WHERE game=? AND {amount_col}=?{date_sql}
                         ORDER BY draw_no DESC
                         """,
-                        (game, amount),
+                        (game, amount, *date_params),
                     ).fetchall()
                     draws = []
                     for row in rows:
