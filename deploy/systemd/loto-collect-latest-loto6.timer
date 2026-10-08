@@ -3,7 +3,7 @@ Description=Loto6 latest collect on draw nights (Mon/Thu)
 
 [Timer]
 Unit=loto-collect-latest@loto6.service
-# 抽せん〜楽天掲載のあと、おおむね15分以内に拾う
+# 開始 20:50: 公式案内の「20:30すぎ照会可」に合わせた想定（楽天 lastresults の実測時刻ではない）
 OnCalendar=Mon,Thu *-*-* 20:50:00
 OnCalendar=Mon,Thu *-*-* 21:05:00
 OnCalendar=Mon,Thu *-*-* 21:20:00

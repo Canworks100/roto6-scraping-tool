@@ -1,10 +1,34 @@
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from loto6.notify import _payload_for, alert
 from loto6.parser import Draw
+from loto6.publish import _assert_www_readable
 from loto6.storage import Store, _same_official
+
+
+class WwwReadableTest(unittest.TestCase):
+    def test_rejects_700_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text("<!doctype html><title>x</title>", encoding="utf-8")
+            os.chmod(root, 0o700)
+            os.chmod(index, 0o644)
+            with self.assertRaises(RuntimeError):
+                _assert_www_readable(root)
+
+    def test_accepts_755_and_644(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text("<!doctype html><title>x</title>", encoding="utf-8")
+            os.chmod(root, 0o755)
+            os.chmod(index, 0o644)
+            _assert_www_readable(root)
 
 
 class NotifyTest(unittest.TestCase):
