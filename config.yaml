@@ -1,25 +1,40 @@
 # ロト収集・公開サイトの設定。
 
+# 収集元: rakuten（既定）| mizuho（レガシー・BrowserClient）。失敗通知は環境変数 LOTO_ALERT_WEBHOOK
+collector:
+  source: rakuten
+
 site:
   base_url: "https://www.mizuhobank.co.jp"
   backnumber_index: "/takarakuji/check/loto/backnumber/index.html"
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 rate_limit:
-  min_interval_sec: 1.2
-  max_interval_sec: 2.0
+  # 楽天向け: リクエストごとに数秒空ける
+  min_interval_sec: 3.0
+  max_interval_sec: 5.0
   timeout_sec: 30
   max_retries: 3
   backoff_sec: 5.0
   max_consecutive_failures: 20
 
-# 抽せん直後の番号案内（金額はみずほCSVが出てから足す）
+# 楽天×宝くじ（番号・金額の主入手先）。販売実績は取得不可 → null
 primary:
   base_url: "https://takarakuji.rakuten.co.jp"
   lastresults:
     loto6: "/backnumber/loto6/lastresults/"
     loto7: "/backnumber/loto7/lastresults/"
     miniloto: "/backnumber/mini/lastresults/"
+
+rakuten:
+  base_url: "https://takarakuji.rakuten.co.jp"
+  user_agent: "LotoAnalyticsCollector/1.0 (+https://lottery-analytics.com)"
+  lastresults:
+    loto6: "/backnumber/loto6/lastresults/"
+    loto7: "/backnumber/loto7/lastresults/"
+    miniloto: "/backnumber/mini/lastresults/"
+  past_path: "/backnumber/{slug}_past/"
+  month_path: "/backnumber/{slug}/{yyyymm}/"
 
 # 後方互換（デスクトップ台帳・旧CLI）
 lottery:

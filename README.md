@@ -1,39 +1,41 @@
 # LOTO アナリティクス — 公開サイト＋デスクトップ台帳
 
-みずほ銀行の当せん番号案内から種目別に全回を収集し、**公開サイト（FastAPI + Vite/TS）**で履歴・数字検索・出現傾向・口数指定の頻度ベース組み合わせ生成を提供する。購入台帳は従来どおりローカル専用。
+みずほ銀行の当せん番号案内から種目別に全回を収集し、公開サイト（FastAPI + Vite/TS）で履歴・数字検索・出現傾向・口数指定の頻度ベース組み合わせ生成を提供する。購入台帳は従来どおりローカル専用。
 
-対象ページ:
+## 環境
 
-- [当せん番号案内（ロト6）](https://www.mizuhobank.co.jp/takarakuji/check/loto/loto6/index.html)
-- [先月以前の当せん番号](https://www.mizuhobank.co.jp/takarakuji/check/loto/backnumber/index.html)
+| 環境 | URL |
+| --- | --- |
+| ローカル | http://127.0.0.1:5174 （API: http://127.0.0.1:8000） |
+| ステージング | https://stg.lottery-analytics.com （noindex） |
+| 本番 | https://lottery-analytics.com |
 
-月別ページとバックナンバー詳細は、公式スクリプトが次のCSVを読んで表を作っている。このツールはそのCSVを取得する。
+VPS: Conoha `160.251.237.42`。DNS / CDN は Cloudflare。詳細は `deploy/README.md`。
 
-- 直近の回号一覧: `/retail/takarakuji/loto/loto6/csv/loto6.csv`
-- 各回: `/retail/takarakuji/loto/loto6/csv/A102{回号4桁}.CSV`
+## 必要なもの
 
-取得済みの回は保存しない。失敗した回はログに残し、再実行で続きから取る。
+- Python 3.11+、Node.js 20+、npm
+- ローカル開発用の venv / `npm install`
+- 本番・ステージング操作時: SSH（鍵はリポジトリ外の `.secrets`）
 
-## 公開サイト（ローカル開発）
+## ローカル
 
 ```bash
-# 1) 旧DBがあればマルチゲームDBへ
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
+# 旧DBがあればマルチゲームDBへ
 PYTHONPATH=src python -m loto6 migrate-legacy
 
-# 2) API
+# API
 PYTHONPATH=src:apps/api .venv/bin/uvicorn loto_api.main:app --reload --host 127.0.0.1 --port 8000
-# または
-PYTHONPATH=src python -m loto6 serve-api --reload
 
-# 3) UI
+# UI（別ターミナル）
 cd apps/web && npm install && npm run dev
 ```
 
-- API: `/api/games`, `/api/{game}/history|search|trends`, `POST /api/{game}/generate`
-- DB: `data/loto.sqlite`（`game` + `draw_no`）
-- VPS 手順（本番反映は明示許可後）: `deploy/README.md`
-
-### 収集（種目別）
+収集:
 
 ```bash
 PYTHONPATH=src python -m loto6 collect --game loto6 --all
@@ -41,9 +43,48 @@ PYTHONPATH=src python -m loto6 collect --game loto7 --all
 PYTHONPATH=src python -m loto6 collect --game miniloto --all
 ```
 
-## 収支ノート（デスクトップ・別系統）
+分析・テスト:
 
-デスクトップの `loto6-app` をダブルクリックするか、次でウィンドウが開きます。
+```bash
+PYTHONPATH=src python -m loto6 analyze --game loto6
+PYTHONPATH=src python -m unittest discover -s tests
+```
+
+## ステージング
+
+- ホスト: `stg.lottery-analytics.com`
+- nginx: `deploy/nginx/loto-staging.conf`（`Disallow: /` と `X-Robots-Tag: noindex, nofollow`）
+- 本番の `robots.txt` / `sitemap.xml` をコピーしない
+- 反映は明示許可後のみ
+
+## 本番
+
+本番反映は明示許可があるときだけ実行する。手順の主コマンドは次の2本。
+
+```bash
+# バックアップ → 本番へ転送
+./scripts/deploy-production.sh
+
+# Backup/ から差し戻す
+./scripts/rollback-production.sh
+```
+
+初回セットアップ・Cloudflare・SSH は `deploy/README.md`。
+
+## ディレクトリ構成
+
+| パス | 内容 |
+| --- | --- |
+| `apps/web/` | 公開フロント（Vite/TS） |
+| `apps/api/` | FastAPI |
+| `src/` | 収集・CLI・デスクトップ台帳 |
+| `data/loto.sqlite` | 公開・マルチゲームDB |
+| `data/loto6.sqlite` | デスクトップ台帳用（従来） |
+| `deploy/` | nginx / systemd / セキュリティ方針 |
+| `scripts/` | 本番デプロイ・差し戻し |
+| `logs/loto6.log` | 取得ログ |
+
+## 収支ノート（デスクトップ・別系統）
 
 ```bash
 ./loto6-app
@@ -51,43 +92,8 @@ PYTHONPATH=src python -m loto6 collect --game miniloto --all
 PYTHONPATH=src python -m loto6 app
 ```
 
-買った回・数字・口数・金額を記録すると、取り込み済みの当せん結果から等級と当選額を計算し、損益を出します。データは **`data/loto6.sqlite`（従来DB）** に残ります。公開用の `data/loto.sqlite` とは分離しています。
-
-## 公式サイトの購入履歴
-
-「公式サイトから取り込む」を押すと、Chromeで[宝くじ公式サイトのマイページ](https://www.takarakuji-official.jp/mypage/)が開きます。そこでログインし、購入履歴を表示すると、ロト6の回号・数字・口数を記録します。同じ口は二重に入れません。メールアドレスとパスワードは公式サイトの画面にだけ入力し、このアプリには保存しません。2回目以降は、同じChromeにログインが残っていればそのまま取り込めます。
-
-みずほダイレクトで買った分は、銀行の購入明細照会にあります。そちらのログイン情報をアプリに預ける取り込みはしません。
-
-## 準備
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## 分析（CLI）
-
-```bash
-PYTHONPATH=src python -m loto6 analyze --game loto6
-```
+データは `data/loto6.sqlite`。公開用 `data/loto.sqlite` とは分離。
 
 ## 設定
 
 種目定義は `config.yaml` の `games.*`。公開レート制限は `public.*`。
-
-## 出力
-
-| パス | 内容 |
-| --- | --- |
-| `data/loto.sqlite` | 公開・マルチゲームDB |
-| `data/loto6.sqlite` | デスクトップ台帳用（従来） |
-| `apps/web/dist/` | 公開フロントのビルド成果物 |
-| `logs/loto6.log` | 取得ログ |
-
-## テスト
-
-```bash
-PYTHONPATH=src python -m unittest discover -s tests
-```

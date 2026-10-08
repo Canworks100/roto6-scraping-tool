@@ -47,6 +47,10 @@ def years_ago(years: int, today: date | None = None) -> str:
     return cutoff.isoformat()
 
 
+def _collector_source(config: dict[str, Any]) -> str:
+    return str((config.get("collector") or {}).get("source") or "mizuho").strip().lower()
+
+
 def collect(
     config: dict[str, Any],
     years: int | None = None,
@@ -54,6 +58,15 @@ def collect(
     all_history: bool = False,
     game: str = "loto6",
 ) -> dict[str, int]:
+    if _collector_source(config) == "rakuten":
+        from loto6.rakuten_collect import collect_rakuten_history
+
+        if all_history or years is None or years <= 0:
+            return collect_rakuten_history(config, game=game, refresh=refresh)
+        # 年指定でも楽天は月次一覧を辿る（間隔は rate_limit）。部分取り込みは未対応のため全履歴相当。
+        logger.info("[%s] collector.source=rakuten のため過去月次を取り込みます", game)
+        return collect_rakuten_history(config, game=game, refresh=refresh)
+
     game_def = get_game(config, game)
     site = site_for_game(config, game)
     client_config = {**config, "site": site}
@@ -192,6 +205,11 @@ def collect(
 
 def collect_latest(config: dict[str, Any], game: str = "loto6", lookback: int = 4) -> dict[str, int]:
     """番号が分かった時点で保存し、公式CSVが出ていれば金額も足して速報にする。"""
+    if _collector_source(config) == "rakuten":
+        from loto6.rakuten_collect import collect_rakuten_latest
+
+        return collect_rakuten_latest(config, game=game, lookback=lookback)
+
     game_def = get_game(config, game)
     site = site_for_game(config, game)
     store = Store(Path(config["_sqlite_path"]))

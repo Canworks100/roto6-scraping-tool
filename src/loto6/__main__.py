@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("app", help="収支ノートをウィンドウで開く（デスクトップ台帳・従来DB）")
 
-    collect_parser = sub.add_parser("collect", help="みずほ銀行から過去分を収集する")
+    collect_parser = sub.add_parser("collect", help="設定の collector.source に従い過去分・速報を収集する")
     collect_parser.add_argument("--game", default="loto6", choices=["loto6", "loto7", "miniloto"])
     collect_parser.add_argument("--years", type=int, default=None, help="何年分を集めるか（既定は設定ファイル）")
     collect_parser.add_argument("--all", action="store_true", help="第1回から最新回まで全件を取り込む")
@@ -94,13 +94,28 @@ def main(argv: list[str] | None = None) -> int:
         uvicorn.run("loto_api.main:app", host=args.host, port=args.port, reload=args.reload)
         return 0
     if args.command == "collect":
-        if args.latest:
-            collect_latest(config, game=args.game)
-        elif args.all:
-            collect(config, years=None, refresh=args.refresh, all_history=True, game=args.game)
-        else:
-            years = args.years if args.years is not None else int(config["lottery"]["years"])
-            collect(config, years=years, refresh=args.refresh, all_history=False, game=args.game)
+        from loto6.notify import alert
+
+        source = str((config.get("collector") or {}).get("source") or "mizuho")
+        try:
+            if args.latest:
+                result = collect_latest(config, game=args.game)
+            elif args.all:
+                result = collect(config, years=None, refresh=args.refresh, all_history=True, game=args.game)
+            else:
+                years = args.years if args.years is not None else int(config["lottery"]["years"])
+                result = collect(config, years=years, refresh=args.refresh, all_history=False, game=args.game)
+        except Exception as exc:  # noqa: BLE001
+            alert(f"LOTO収集失敗 game={args.game} source={source} latest={args.latest}: {exc}")
+            raise
+        failed = int((result or {}).get("failed") or 0)
+        if failed > 0:
+            alert(
+                f"LOTO収集で失敗あり game={args.game} source={source} "
+                f"failed={failed} inserted={result.get('inserted')} "
+                f"latest={bool(args.latest)}"
+            )
+            return 1
         return 0
     if args.command == "import-raw":
         raw_dir = Path(args.raw_dir) if args.raw_dir else abs_path(config, "storage.raw_dir")

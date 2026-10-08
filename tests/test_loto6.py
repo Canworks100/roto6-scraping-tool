@@ -96,6 +96,21 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(draws[-1].draw_date, "2026-10-05")
         self.assertEqual(draws[-1].prizes[1], (None, None))
 
+    def test_rakuten_month_html(self) -> None:
+        from loto6.parser import parse_rakuten_month_html
+
+        html = (FIXTURES / "rakuten_month_loto6.html").read_text(encoding="utf-8")
+        draws = parse_rakuten_month_html(html, source_url="https://example.test/month")
+        self.assertEqual([d.draw_no for d in draws], [2142, 2143])
+        self.assertEqual(draws[-1].numbers, [1, 7, 8, 29, 40, 43])
+        self.assertEqual(draws[-1].bonus, 15)
+        self.assertEqual(draws[-1].prizes[1], (1, 491_368_200))
+        self.assertEqual(draws[-1].prizes[2], (10, 7_695_200))
+        self.assertEqual(draws[-1].carryover_amount, 0)
+        self.assertIsNone(draws[-1].sales_amount)
+        self.assertEqual(draws[0].prizes[1], (None, None))
+        self.assertEqual(draws[0].carryover_amount, 234_869_815)
+
 
 class StorageAndAnalysisTest(unittest.TestCase):
     def test_save_is_idempotent_and_analysis_runs(self) -> None:

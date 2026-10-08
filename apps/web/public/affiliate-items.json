@@ -1,0 +1,26 @@
+[
+  {
+    "id": "okane",
+    "on": true,
+    "url": "https://link.amazon/B0gy310Xo",
+    "title": "お金の秘伝",
+    "image": "https://m.media-amazon.com/images/I/819gHe2DdmL._SL300_.jpg",
+    "price": "¥1,870"
+  },
+  {
+    "id": "sugoun",
+    "on": true,
+    "url": "https://link.amazon/B07pqrgnK",
+    "title": "スゴ運。",
+    "image": "https://m.media-amazon.com/images/I/71gGEEpAtwL._SL300_.jpg",
+    "price": "¥1,430"
+  },
+  {
+    "id": "kyoun",
+    "on": true,
+    "url": "https://link.amazon/B055QnbU6",
+    "title": "宝くじ億万長者の「宝くじ」強運の法則",
+    "image": "https://m.media-amazon.com/images/I/91Xgao0CSML._SL300_.jpg",
+    "price": "¥3,498"
+  }
+]

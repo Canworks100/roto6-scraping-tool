@@ -1,0 +1,11 @@
+[Unit]
+Description=Miniloto latest collect on draw nights (Tue)
+
+[Timer]
+Unit=loto-collect-latest@miniloto.service
+OnCalendar=Tue *-*-* 21:15:00
+Persistent=true
+RandomizedDelaySec=3m
+
+[Install]
+WantedBy=timers.target

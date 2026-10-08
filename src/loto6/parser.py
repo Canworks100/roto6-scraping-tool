@@ -349,6 +349,85 @@ def parse_rakuten_lastresults(
     return draws
 
 
+def parse_rakuten_month_html(
+    html: str,
+    source_url: str = "",
+    *,
+    game: str = "loto6",
+    main_count: int = 6,
+    bonus_count: int = 1,
+    min_number: int = 1,
+    max_number: int = 43,
+    prize_grades: int = 5,
+) -> list[Draw]:
+    """楽天×宝くじの月次バックナンバー（等級・キャリー付き）を読む。販売実績は無い。"""
+    soup = BeautifulSoup(html, "html.parser")
+    draws: list[Draw] = []
+    for table in soup.select("table.tblNumberGuid"):
+        fields: dict[str, list[str]] = {}
+        for row in table.select("tr"):
+            cells = row.find_all(["th", "td"])
+            if not cells:
+                continue
+            key = zen_to_han(_text(cells[0])).replace(" ", "")
+            values = [zen_to_han(_text(cell)) for cell in cells[1:]]
+            if key:
+                fields[key] = values
+        draw_cell = " ".join(fields.get("回号") or [])
+        matched = re.search(r"第(\d+)回", draw_cell)
+        date_cell = " ".join(fields.get("抽せん日") or fields.get("抽選日") or [])
+        if not matched or not date_cell:
+            continue
+        main_vals = fields.get("本数字") or []
+        numbers = [int(v) for v in main_vals if re.fullmatch(r"\d+", v)][:main_count]
+        bonus_vals = fields.get("ボーナス数字") or fields.get("ボーナス") or []
+        bonus_nums = [int(v) for v in re.findall(r"\d+", " ".join(bonus_vals))][:bonus_count]
+        if len(numbers) != main_count or len(bonus_nums) < bonus_count:
+            continue
+        try:
+            _validate_numbers(
+                numbers,
+                bonus_nums,
+                main_count=main_count,
+                min_number=min_number,
+                max_number=max_number,
+            )
+            draw_date = parse_japanese_date(date_cell)
+        except ParseError:
+            continue
+        prizes: dict[int, tuple[int | None, int | None]] = {
+            grade: (None, None) for grade in range(1, prize_grades + 1)
+        }
+        for grade in range(1, prize_grades + 1):
+            vals = fields.get(f"{grade}等") or []
+            if not vals:
+                continue
+            count = parse_winners(vals[0]) if vals else None
+            amount = parse_yen(vals[1]) if len(vals) > 1 else parse_yen(vals[0])
+            # 「該当なし」のみのときは count/amount とも None
+            if len(vals) == 1 and "該当なし" in vals[0]:
+                count, amount = None, None
+            prizes[grade] = (count, amount)
+        carry_vals = fields.get("キャリーオーバー") or []
+        carry = parse_yen(carry_vals[0]) if carry_vals else None
+        draws.append(
+            Draw(
+                draw_no=int(matched.group(1)),
+                draw_date=draw_date,
+                numbers=numbers,
+                bonus=bonus_nums[0],
+                bonus2=bonus_nums[1] if bonus_count > 1 else None,
+                prizes=prizes,
+                sales_amount=None,
+                carryover_amount=carry,
+                source_url=source_url,
+                game=game,
+            )
+        )
+    draws.sort(key=lambda item: item.draw_no)
+    return draws
+
+
 def parse_static_backnumber_html(
     html: str,
     source_url: str = "",
