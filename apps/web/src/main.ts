@@ -280,8 +280,12 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
 }
 
 function renderNotFound(message = "お探しのページは見つかりませんでした。") {
-  setSeo(location.pathname, { noindex: true });
-  document.title = `ページが見つかりません｜LOTO アナリティクス`;
+  setSeo(location.pathname, {
+    noindex: true,
+    title: "ページが見つかりません｜LOTO アナリティクス",
+    description:
+      "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。",
+  });
   setJsonLd(null);
   root.innerHTML = shell(
     `<div class="box"><h1>ページが見つかりません</h1><p class="muted">${esc(message)}</p>
