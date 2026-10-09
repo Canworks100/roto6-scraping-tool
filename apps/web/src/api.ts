@@ -131,7 +131,6 @@ export type ComboPayload = {
     level?: number;
     summary: string;
     points: { label: string; tone: string; text: string }[];
-    special?: { label: string; tone: string; text: string }[];
   };
   hits?: ComboHit[];
   whatif?: {

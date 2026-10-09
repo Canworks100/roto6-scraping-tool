@@ -805,12 +805,8 @@ def combo_payload(
     exact: list[dict[str, Any]] = []
     samples: list[dict[str, Any]] = []
     hits: list[dict[str, Any]] = []
-    prize1_amounts: list[int] = []
     for row in rows:
         data = dict(row)
-        p1_raw = data.get("prize1_amount")
-        if p1_raw is not None:
-            prize1_amounts.append(int(p1_raw))
         mains = []
         for index in range(1, main_count + 1):
             value = data.get(f"n{index}")
@@ -951,8 +947,6 @@ def combo_payload(
             shape,
             numbers_out,
             main_count,
-            exact=exact,
-            prize1_amounts=prize1_amounts,
         ),
         "meta": {"draw_count": draw_count, "period": period},
     }
@@ -964,15 +958,6 @@ _TONE_WEIGHT = {"good": 2, "ok": 1, "off": 0}
 
 def _point_row(label: str, tone: str, text: str) -> dict[str, Any]:
     return {"label": label, "tone": tone, "text": text}
-
-
-def _high_prize1_threshold(amounts: list[int]) -> int | None:
-    """1等金額の上位約25%境界。比較は超え（より高い）で判定する。"""
-    if len(amounts) < 4:
-        return None
-    ordered = sorted(amounts)
-    idx = (len(ordered) * 3) // 4
-    return ordered[idx]
 
 
 def _level_from_quality(quality: int) -> int:
@@ -993,9 +978,6 @@ def _combo_diagnosis(
     shape: dict[str, Any],
     numbers_stats: list[dict[str, Any]],
     main_count: int,
-    *,
-    exact: list[dict[str, Any]] | None = None,
-    prize1_amounts: list[int] | None = None,
 ) -> dict[str, Any]:
     """5項目の形所見を、5段階の文言にまとめる。"""
     points: list[dict[str, Any]] = []
@@ -1117,40 +1099,6 @@ def _combo_diagnosis(
 
     quality = sum(_TONE_WEIGHT.get(str(p["tone"]), 0) for p in points)
     level = _level_from_quality(quality)
-    special: list[dict[str, Any]] = []
-    exact_rows = exact or []
-    exact_count = len(exact_rows)
-    if exact_count > 0:
-        special.append(
-            {
-                "label": "既出組合せ",
-                "tone": "off",
-                "text": f"同じ組合せが過去に{exact_count}回あります。同じ並びは二度とこない前提です。",
-            }
-        )
-        level = max(0, level - 2)
-        threshold = _high_prize1_threshold(prize1_amounts or [])
-        high_hits = []
-        for row in exact_rows:
-            amount = row.get("prize1_amount")
-            if amount is None or threshold is None:
-                continue
-            if int(amount) > int(threshold):
-                high_hits.append(row)
-        if high_hits:
-            shown = "、".join(
-                f"第{int(h['draw_no'])}回（{int(h['prize1_amount']):,}円）" for h in high_hits[:3]
-            )
-            special.append(
-                {
-                    "label": "高額既出",
-                    "tone": "off",
-                    "text": f"過去の同一組合せで高額の1等が出ています。{shown}。",
-                }
-            )
-            level = max(0, level - 1)
-
-    verdict = DX_LEVELS[level]
     summaries = {
         4: "奇偶・合計・連番・帯・出現のバランスが寄った並びです。",
         3: "形はおおむね整っています。一部に寄りがあります。",
@@ -1158,14 +1106,9 @@ def _combo_diagnosis(
         1: "寄っているところがあり、もう一段の見直し余地があります。",
         0: "過去では少なめの形に寄っています。",
     }
-    if special:
-        summary = "既出の並びがあるため、所見を下げています。"
-    else:
-        summary = summaries[level]
     return {
-        "verdict": verdict,
+        "verdict": DX_LEVELS[level],
         "level": level + 1,
-        "summary": summary,
+        "summary": summaries[level],
         "points": points,
-        "special": special,
     }

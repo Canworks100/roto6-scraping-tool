@@ -1491,12 +1491,6 @@ async function renderCombo(game: string, info: GameInfo) {
           `<div class="dx-point ${esc(p.tone)}"><strong>${esc(p.label)}</strong><p>${esc(p.text)}</p></div>`,
       )
       .join("");
-    const specialHtml = (dx?.special || [])
-      .map(
-        (s) =>
-          `<div class="dx-point ${esc(s.tone)}"><strong>${esc(s.label)}</strong><p>${esc(s.text)}</p></div>`,
-      )
-      .join("");
     const w = res.whatif;
     const hitRows = (res.hits || [])
       .map((item) => {
@@ -1549,11 +1543,6 @@ async function renderCombo(game: string, info: GameInfo) {
           <p class="dx-summary">${esc(dx?.summary || "")}</p>
         </div>
         <div class="dx-points">${pointHtml}</div>
-        ${
-          specialHtml
-            ? `<div class="dx-special"><h2 class="dx-special-title">注意</h2><div class="dx-points">${specialHtml}</div></div>`
-            : ""
-        }
       </div>
       ${whatifBox}
       <div class="box">
