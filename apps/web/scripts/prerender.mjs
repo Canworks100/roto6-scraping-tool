@@ -32,7 +32,7 @@ const VIEWS = [
     path: "",
     title: (l) => `${l}｜${SITE}`,
     desc: (l) =>
-      `${l}の当選番号や予想、出現の様子へ進む入口です。必要なページへここから辿れます。`,
+      `${l}の当選番号や予想、出現の様子へ進む入口です。結果・分析・予想のページへここから辿れます。`,
   },
   {
     view: "latest",
@@ -56,6 +56,13 @@ const VIEWS = [
       `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   },
   {
+    view: "analyze",
+    path: "/analyze",
+    title: (l) => `${l} 分析｜${SITE}`,
+    desc: (l) =>
+      `${l}の出現回数や組み合わせなど、傾向を見る分析ページへの入口です。`,
+  },
+  {
     view: "freq",
     path: "/freq",
     title: (l) => `${l} よく出る数字・出現回数｜${SITE}`,
@@ -67,14 +74,14 @@ const VIEWS = [
     path: "/pairs",
     title: (l) => `${l} よく出る組み合わせ｜${SITE}`,
     desc: (l) =>
-      `${l}で同じ回に一緒に出やすい2個や3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
+      `${l}の当選番号で、3個以上一緒に出やすい組み合わせを回数順にまとめています。`,
   },
   {
     view: "shape",
     path: "/shape",
     title: (l) => `${l} 奇数偶数・合計｜${SITE}`,
     desc: (l) =>
-      `${l}の奇数偶数や合計、連番など、本数字の形を開催回数で集計。自分の口の偏りを確認できます。`,
+      `${l}の本数字について、奇数偶数の分かれ方と合計の出方を回数で見られます。`,
   },
   {
     view: "grid",
@@ -107,7 +114,7 @@ const VIEWS = [
   {
     view: "combo",
     path: "/combo",
-    title: (l) => `${l} 組合診断｜1口の所見｜${SITE}`,
+    title: (l) => `${l} 予想診断｜1口の所見｜${SITE}`,
     desc: (l) =>
       `${l}の1口について、奇数偶数や合計などの所見と、過去に照合した一致の様子を表示します。`,
   },
@@ -128,7 +135,7 @@ const LEGAL = [
     desc: "ロト6・ロト7・ミニロトの当選番号と予想を、会員登録なしで調べられるサイトです。",
     body: `<p>LOTO アナリティクスは、ロト6・ロト7・ミニロトの予想と、過去の当せん番号の確認ができるサイトです。</p>
     <p>掲載している番号・口数・金額は、公表されている抽せん結果を整理したものです。</p>
-    <p>各種目のページから、予想、最新結果、速報、結果一覧、出現回数、金額ランキング、数字検索、組合診断を利用できます。</p>`,
+    <p>各種目のページから、予想、最新結果、速報、結果一覧、出現回数、金額ランキング、数字検索、予想診断を利用できます。</p>`,
   },
   {
     path: "/disclaimer",
@@ -148,7 +155,7 @@ const LEGAL = [
     body: `<p>本サイトは会員登録を行わず、閲覧だけでご利用いただけます。氏名・住所・電話番号などの入力は求めていません。</p>
     <p>数字検索の登録数字は、ブラウザのCookie（loto_fav）に保存します。会員情報としては扱いません。保存期間は最大400日で、ブラウザ側でCookieを削除すると消えます。</p>
     <p>サーバーの運用上、アクセス日時やIPアドレスなどが記録されることがあります。これらは障害対応と不正利用の防止に限り使用します。</p>
-    <p>広告やアクセス解析を導入する場合は、本ページの内容を更新します。</p>`,
+    <p>アクセス解析のため、Googleタグマネージャ（GTM）経由でGoogleアナリティクス（GA4）を利用します。Cookie等により閲覧状況が収集されることがあります。詳細はGoogleのプライバシーポリシーをご確認ください。</p>`,
   },
   {
     path: "/terms",
@@ -211,7 +218,7 @@ function flashNewsHeadline(label, drawNo, dateIso) {
   return `第${padded}回${label}の当選番号速報`;
 }
 
-function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, article }) {
+function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, breadcrumbLd, article }) {
   let out = html;
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   if (out.includes('name="description"')) {
@@ -257,11 +264,17 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, art
       `    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`,
     );
   }
+  if (breadcrumbLd) {
+    out = out.replace(
+      "</head>",
+      `    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}</script>\n  </head>`,
+    );
+  }
   out = out.replace(/<div id="app"><\/div>/, `<div id="app">${bodyHtml}</div>`);
   return out;
 }
 
-function writePage(path, title, description, bodyHtml, jsonLd, article) {
+function writePage(path, title, description, bodyHtml, jsonLd, article, breadcrumbLd) {
   const dir = join(dist, path.replace(/^\//, ""));
   mkdirSync(dir, { recursive: true });
   const html = injectMeta(template, {
@@ -270,9 +283,106 @@ function writePage(path, title, description, bodyHtml, jsonLd, article) {
     canonical: loc(path || "/"),
     bodyHtml,
     jsonLd,
+    breadcrumbLd,
     article,
   });
   writeFileSync(join(dir, "index.html"), html);
+}
+
+const VIEW_CRUMB_LABEL = {
+  analyze: "分析",
+  freq: "出現回数",
+  pairs: "組み合わせ",
+  shape: "奇数偶数",
+  grid: "出目表",
+  follow: "前回を含む回数",
+  latest: "最新結果",
+  generate: "次回予想",
+  history: "結果一覧",
+  combo: "予想診断",
+  flash: "速報",
+  ranks: "金額ランキング",
+  search: "数字検索",
+};
+
+const ANALYZE_LEAF = new Set(["freq", "pairs", "shape", "grid", "follow"]);
+const GUIDE_TITLES = {
+  "how-to-buy": "買い方",
+  odds: "確率",
+  faq: "FAQ",
+};
+
+function breadcrumbJsonLd(items) {
+  if (!items?.length) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => {
+      const row = {
+        "@type": "ListItem",
+        position: i + 1,
+        name: it.name,
+      };
+      if (it.path) row.item = loc(it.path);
+      return row;
+    }),
+  };
+}
+
+function crumbTrail(game, view, opts = {}) {
+  const items = [
+    { name: "ホーム", path: "/" },
+    { name: game.label, path: `/${game.id}` },
+  ];
+  if (view === "hub") return items;
+  if (view === "guide") {
+    items.push({ name: GUIDE_TITLES[opts.guideSlug] || "ガイド" });
+    return items;
+  }
+  if (view === "number") {
+    items.push({ name: "分析", path: `/${game.id}/analyze` });
+    items.push({ name: "出現回数", path: `/${game.id}/freq` });
+    items.push({ name: pad2(opts.number) });
+    return items;
+  }
+  if (ANALYZE_LEAF.has(view)) {
+    items.push({ name: "分析", path: `/${game.id}/analyze` });
+    items.push({ name: VIEW_CRUMB_LABEL[view] || view });
+    return items;
+  }
+  if (view === "analyze") {
+    items.push({ name: "分析" });
+    return items;
+  }
+  if (view === "flash" && opts.drawNo != null) {
+    items.push({ name: "速報", path: `/${game.id}/flash` });
+    items.push({ name: `第${pad4(opts.drawNo)}回` });
+    return items;
+  }
+  const leaf = VIEW_CRUMB_LABEL[view];
+  if (leaf) {
+    items.push({ name: leaf });
+    return items;
+  }
+  return items;
+}
+
+function crumbHtml(items) {
+  if (!items || items.length < 2) return "";
+  const parts = items.map((it, i) => {
+    const last = i === items.length - 1;
+    if (last || !it.path) return `<span aria-current="page">${esc(it.name)}</span>`;
+    return `<a href="${it.path}">${esc(it.name)}</a>`;
+  });
+  return `<nav class="crumb" aria-label="パンくず">${parts.join('<span aria-hidden="true"> / </span>')}</nav>`;
+}
+
+function withCrumb(game, view, body, opts = {}) {
+  const items = crumbTrail(game, view, opts);
+  return {
+    body: `${crumbHtml(items)}${body}`,
+    breadcrumbLd: breadcrumbJsonLd(items),
+  };
 }
 
 function chipNav(game, compact) {
@@ -288,23 +398,23 @@ function chipNav(game, compact) {
         ["latest", "最新結果"],
         ["generate", "次回予想"],
         ["history", "結果一覧"],
-        ["freq", "出現回数"],
-        ["pairs", "組み合わせ"],
-        ["shape", "奇数偶数"],
-        ["grid", "出目表"],
-        ["follow", "前回を含む回数"],
-        ["ranks", "金額ランキング"],
-        ["search", "数字検索"],
-        ["combo", "組合診断"],
-        ["flash", "速報"],
+        ["analyze", "分析"],
+        ["combo", "予想診断"],
       ];
   const links = pages.map(([id, t]) => `<a href="/${game.id}/${id}">${t}</a>`).join("");
-  const guides = compact
-    ? ""
-    : `<a href="/${game.id}/guide/how-to-buy">買い方</a>
-       <a href="/${game.id}/guide/odds">確率</a>
-       <a href="/${game.id}/guide/faq">FAQ</a>`;
-  return `<nav class="chip-nav">${links}${guides}</nav>`;
+  return `<nav class="chip-nav">${links}</nav>`;
+}
+
+function hubSectionList(title, items) {
+  return `<section class="game-block-sec hub-sec">
+    <h3>${title}</h3>
+    <ul class="hub-link-list">${items.join("")}</ul>
+  </section>`;
+}
+
+function hubLi(game, id, title, note) {
+  const noteHtml = note ? `<span class="hub-link-note">${note}</span>` : "";
+  return `<li><a href="/${game.id}/${id}">${title}</a>${noteHtml}</li>`;
 }
 
 function homeCardBody(game) {
@@ -371,10 +481,27 @@ function gameBlockBody(game) {
           : "—"
       }</div>
     </section>
-    <section class="game-block-sec">
-      <h3>${game.label}のページ</h3>
-      ${chipNav(game, false)}
-    </section>
+    ${hubSectionList("結果", [
+      hubLi(game, "latest", "最新結果"),
+      hubLi(game, "flash", "速報"),
+      hubLi(game, "history", "結果一覧"),
+      hubLi(game, "ranks", "金額ランキング"),
+      hubLi(game, "search", "数字検索"),
+    ])}
+    ${hubSectionList("分析", [
+      hubLi(game, "analyze", "分析トップ", "出現・組み合わせなど"),
+      hubLi(game, "freq", "出現回数"),
+      hubLi(game, "pairs", "組み合わせ"),
+    ])}
+    ${hubSectionList("予想", [
+      hubLi(game, "generate", "次回予想"),
+      hubLi(game, "combo", "予想診断"),
+    ])}
+    ${hubSectionList("ガイド", [
+      `<li><a href="/${game.id}/guide/how-to-buy">買い方</a></li>`,
+      `<li><a href="/${game.id}/guide/odds">確率</a></li>`,
+      `<li><a href="/${game.id}/guide/faq">FAQ</a></li>`,
+    ])}
   </article>`;
 }
 
@@ -524,11 +651,8 @@ function ballsHtml(numbers, bonus) {
 
 function homeBody() {
   const cards = GAMES.map((game) => homeCardBody(game)).join("");
-  const dirs = GAMES.map(
-    (game) => `<div class="home-dir-row">
-      <h3><a href="/${game.id}">${game.label}</a></h3>
-      ${chipNav(game, false)}
-    </div>`,
+  const hubLinks = GAMES.map(
+    (game) => `<li><a href="/${game.id}">${game.label}のページへ</a></li>`,
   ).join("");
   return `<section class="home-fv">
     <header class="hub-head">
@@ -538,8 +662,8 @@ function homeBody() {
     <div class="home-kpi">${cards}</div>
   </section>
   <section class="box home-dirs">
-    <h2>ページ一覧</h2>
-    <div class="inner">${dirs}</div>
+    <h2>くじ種別</h2>
+    <div class="inner"><ul class="hub-link-list">${hubLinks}</ul></div>
   </section>`;
 }
 
@@ -638,15 +762,34 @@ for (const game of GAMES) {
       body = `<div class="box"><h1>${game.label} 数字検索</h1>
         <p>気になる数字を選ぶと、本数字に出た開催が一覧できます。登録数字はこの端末に保存します。</p></div>`;
     } else if (view.view === "combo") {
-      body = `<div class="box"><h1>${game.label} 組合診断</h1>
+      body = `<div class="box"><h1>${game.label} 予想診断</h1>
         <p>1口の奇数偶数や合計などの所見と、過去開催との照合結果を表示します。</p></div>`;
+    } else if (view.view === "analyze") {
+      body = `<div class="box"><h1>${game.label} 分析</h1>
+        <p>出現の様子や組み合わせなど、傾向を見るページへの入口です。</p>
+        <ul class="analyze-list">
+          <li class="analyze-item"><a href="/${game.id}/freq">出現回数</a><p class="muted">よく出る数字をランキングで見られます。</p></li>
+          <li class="analyze-item"><a href="/${game.id}/pairs">組み合わせ</a><p class="muted">3個以上一緒に出やすい組を回数順にまとめます。</p></li>
+          <li class="analyze-item"><a href="/${game.id}/shape">奇数偶数</a><p class="muted">奇数偶数の分かれ方と合計の出方を見られます。</p></li>
+          <li class="analyze-item"><a href="/${game.id}/grid">出目表</a><p class="muted">直近の本数字を表で縦に並べて追えます。</p></li>
+          <li class="analyze-item"><a href="/${game.id}/follow">前回を含む回数</a><p class="muted">前回と同じ数字がまた出た回数を数字ごとに見られます。</p></li>
+        </ul></div>`;
     } else {
       const h1 = view.title(game.label).split("｜")[0];
       body = `<div class="box"><h1>${h1}</h1><p>${esc(view.desc(game.label))}</p>
-        <p><a href="/${game.id}/freq">出現回数</a>　<a href="/${game.id}/history">結果一覧</a></p></div>`;
+        <p><a href="/${game.id}/analyze">分析</a>　<a href="/${game.id}/history">結果一覧</a></p></div>`;
     }
 
-    writePage(path.slice(1), view.title(game.label), view.desc(game.label), body, jsonLd);
+    const wrapped = withCrumb(game, view.view, body);
+    writePage(
+      path.slice(1),
+      view.title(game.label),
+      view.desc(game.label),
+      wrapped.body,
+      jsonLd,
+      undefined,
+      wrapped.breadcrumbLd,
+    );
     urls.push(path);
   }
 
@@ -657,11 +800,15 @@ for (const game of GAMES) {
     const body = `<div class="box"><h1>${game.label} ${nn} の出現回数</h1>
       <p>本数字としての出現回数: ${count}回</p>
       <p><a href="/${game.id}/freq">出現回数一覧</a></p></div>`;
+    const wrapped = withCrumb(game, "number", body, { number: n });
     writePage(
       path.slice(1),
       `${game.label} ${nn} の出現回数・相性｜${SITE}`,
       `${game.label}の数字${nn}について、出現回数や最終出現、一緒に出やすい数字をまとめました。`,
-      body,
+      wrapped.body,
+      undefined,
+      undefined,
+      wrapped.breadcrumbLd,
     );
     urls.push(path);
   }
@@ -680,11 +827,15 @@ for (const game of GAMES) {
       <p>${game.label}の${g.title}についての案内です。正式な購入方法・確率は宝くじ公式の案内をご確認ください。</p>
       <p><a href="/${game.id}">${game.label}トップ</a>　<a href="/disclaimer">免責事項</a></p></article>`;
     const descFn = guideDesc[g.slug];
+    const wrapped = withCrumb(game, "guide", body, { guideSlug: g.slug });
     writePage(
       path.slice(1),
       `${game.label} ${g.title}｜${SITE}`,
       descFn ? descFn(game.label) : `${game.label}のガイドです。`,
-      body,
+      wrapped.body,
+      undefined,
+      undefined,
+      wrapped.breadcrumbLd,
     );
     urls.push(path);
   }
@@ -765,15 +916,17 @@ for (const game of GAMES) {
     const desc = md
       ? `第${padded}回${game.label}の当選番号速報。${md}の抽選結果と当せん金額、キャリーオーバーを掲載。`
       : `第${padded}回${game.label}の当選番号速報。抽選結果と当せん金額を掲載。`;
+    const wrapped = withCrumb(game, "flash", body, { drawNo: n });
     writePage(
       path.slice(1),
       `${headline}｜${SITE}`,
       desc,
-      body,
+      wrapped.body,
       jsonLd,
       n >= richStart
         ? { ogType: "article", image: eye, publishedTime: pub }
         : { ogType: "article", publishedTime: pub },
+      wrapped.breadcrumbLd,
     );
     urls.push(path);
     if (n >= richStart) lastmods[path] = drawDate;

@@ -99,7 +99,7 @@ def analyze(rows: list[sqlite3.Row], config: dict[str, Any]) -> dict[str, Any]:
     if not triples_all.empty:
         triples_all["expected"] = triple_expected
     pairs_high, pairs_low = _high_low(pairs_all, 30, 10)
-    triples_high, triples_low = _high_low(triples_all, 20, 10)
+    triples_high, triples_low = _high_low(triples_all, 100, 10)
     odd_even = _odd_even(number_frame, draw_count, main_count)
     sums = _sums(number_frame, draw_count)
     return {
@@ -958,8 +958,12 @@ def combo_payload(
     }
 
 
-def _point_row(label: str, score: int, tone: str, text: str) -> dict[str, Any]:
-    return {"label": label, "score": score, "max": 20, "tone": tone, "text": text}
+DX_LEVELS = ("イマイチ", "もう一息", "普通", "いい感じ！", "とてもいい！")
+_TONE_WEIGHT = {"good": 2, "ok": 1, "off": 0}
+
+
+def _point_row(label: str, tone: str, text: str) -> dict[str, Any]:
+    return {"label": label, "tone": tone, "text": text}
 
 
 def _high_prize1_threshold(amounts: list[int]) -> int | None:
@@ -971,6 +975,19 @@ def _high_prize1_threshold(amounts: list[int]) -> int | None:
     return ordered[idx]
 
 
+def _level_from_quality(quality: int) -> int:
+    """内部品質 0〜10 を 0〜4 の段階へ。"""
+    if quality >= 10:
+        return 4
+    if quality >= 9:
+        return 3
+    if quality >= 7:
+        return 2
+    if quality >= 5:
+        return 1
+    return 0
+
+
 def _combo_diagnosis(
     draw_count: int,
     shape: dict[str, Any],
@@ -980,7 +997,7 @@ def _combo_diagnosis(
     exact: list[dict[str, Any]] | None = None,
     prize1_amounts: list[int] | None = None,
 ) -> dict[str, Any]:
-    """5項目×最大20点＋特殊点（既出・高額既出の減点）。"""
+    """5項目の形所見を、5段階の文言にまとめる。"""
     points: list[dict[str, Any]] = []
     even = int(shape["even_count"])
     odd = int(shape["odd_count"])
@@ -995,7 +1012,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "奇数偶数",
-                20,
                 "good",
                 f"偶数{even}個・奇数{odd}個。過去{same_odd}回と同じ形です。",
             )
@@ -1004,7 +1020,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "奇数偶数",
-                12,
                 "ok",
                 f"偶数{even}個・奇数{odd}個。少し偏っています。過去{same_odd}回です。",
             )
@@ -1013,7 +1028,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "奇数偶数",
-                4,
                 "off",
                 f"偶数{even}個・奇数{odd}個。偏りが強めです。過去{same_odd}回です。",
             )
@@ -1028,7 +1042,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "合計",
-                20,
                 "good",
                 f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}の近くです。過去{same_sum}回。",
             )
@@ -1037,7 +1050,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "合計",
-                12,
                 "ok",
                 f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}からやや離れています。過去{same_sum}回。",
             )
@@ -1046,7 +1058,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "合計",
-                4,
                 "off",
                 f"合計{total_sum}（{sum_bin}）。平均{mean_sum:.0f}から離れています。過去{same_sum}回。",
             )
@@ -1058,7 +1069,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "連番",
-                20,
                 "good",
                 f"連番{adjacent}組。並びは落ち着いています。過去{same_adj}回。",
             )
@@ -1067,7 +1077,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "連番",
-                12,
                 "ok",
                 f"連番{adjacent}組。やや多めです。過去{same_adj}回。",
             )
@@ -1076,7 +1085,6 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "連番",
-                4,
                 "off",
                 f"連番{adjacent}組。連なりが強い並びです。過去{same_adj}回。",
             )
@@ -1086,11 +1094,11 @@ def _combo_diagnosis(
     used = sum(1 for b in bands if int(b["count"]) > 0)
     band_line = "、".join(f"{b['label']}{b['count']}個" for b in bands)
     if used >= 3:
-        points.append(_point_row("番号帯", 20, "good", f"低・中・高に分かれています。{band_line}。"))
+        points.append(_point_row("番号帯", "good", f"低・中・高に分かれています。{band_line}。"))
     elif used == 2:
-        points.append(_point_row("番号帯", 12, "ok", f"帯が二つに寄っています。{band_line}。"))
+        points.append(_point_row("番号帯", "ok", f"帯が二つに寄っています。{band_line}。"))
     else:
-        points.append(_point_row("番号帯", 4, "off", f"帯が一方向に寄っています。{band_line}。"))
+        points.append(_point_row("番号帯", "off", f"帯が一方向に寄っています。{band_line}。"))
 
     hot = sum(1 for s in numbers_stats if int(s["vs_expected"]) >= 0)
     cold = len(numbers_stats) - hot
@@ -1098,17 +1106,17 @@ def _combo_diagnosis(
         points.append(
             _point_row(
                 "出現",
-                20,
                 "good",
                 f"出現の多い数字が{hot}個、控えめが{cold}個です。",
             )
         )
     elif hot:
-        points.append(_point_row("出現", 10, "ok", "選んだ数字はいずれも出現が多めです。"))
+        points.append(_point_row("出現", "ok", "選んだ数字はいずれも出現が多めです。"))
     else:
-        points.append(_point_row("出現", 10, "ok", "選んだ数字はいずれも出現が控えめです。"))
+        points.append(_point_row("出現", "ok", "選んだ数字はいずれも出現が控えめです。"))
 
-    base_score = sum(int(p["score"]) for p in points)
+    quality = sum(_TONE_WEIGHT.get(str(p["tone"]), 0) for p in points)
+    level = _level_from_quality(quality)
     special: list[dict[str, Any]] = []
     exact_rows = exact or []
     exact_count = len(exact_rows)
@@ -1116,11 +1124,11 @@ def _combo_diagnosis(
         special.append(
             {
                 "label": "既出組合せ",
-                "score": -20,
                 "tone": "off",
-                "text": f"同じ組合せが過去に{exact_count}回あります。同じ並びは二度とこない前提で減点します。",
+                "text": f"同じ組合せが過去に{exact_count}回あります。同じ並びは二度とこない前提です。",
             }
         )
+        level = max(0, level - 2)
         threshold = _high_prize1_threshold(prize1_amounts or [])
         high_hits = []
         for row in exact_rows:
@@ -1136,30 +1144,27 @@ def _combo_diagnosis(
             special.append(
                 {
                     "label": "高額既出",
-                    "score": -20,
                     "tone": "off",
                     "text": f"過去の同一組合せで高額の1等が出ています。{shown}。",
                 }
             )
+            level = max(0, level - 1)
 
-    special_score = sum(int(s["score"]) for s in special)
-    score = max(0, min(100, base_score + special_score))
-    verdict = f"{score}点"
-    if special_score < 0:
-        summary = f"基本{base_score}点、特殊{special_score}点。合計{score}点です。"
-    elif base_score >= 80:
-        summary = "奇偶・合計・連番・帯・出現のバランスが寄った並びです。"
-    elif base_score >= 60:
-        summary = "形はおおむね整っています。一部に寄りがあります。"
-    elif base_score >= 40:
-        summary = "よくある形と、寄ったところが混ざっています。"
+    verdict = DX_LEVELS[level]
+    summaries = {
+        4: "奇偶・合計・連番・帯・出現のバランスが寄った並びです。",
+        3: "形はおおむね整っています。一部に寄りがあります。",
+        2: "よくある形と、寄ったところが混ざっています。",
+        1: "寄っているところがあり、もう一段の見直し余地があります。",
+        0: "過去では少なめの形に寄っています。",
+    }
+    if special:
+        summary = "既出の並びがあるため、所見を下げています。"
     else:
-        summary = "過去では少なめの形に寄っています。"
+        summary = summaries[level]
     return {
         "verdict": verdict,
-        "score": score,
-        "base_score": base_score,
-        "special_score": special_score,
+        "level": level + 1,
         "summary": summary,
         "points": points,
         "special": special,

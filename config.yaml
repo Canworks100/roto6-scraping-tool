@@ -117,10 +117,14 @@ storage:
 analysis:
   output_dir: "output"
   top_pairs: 30
-  top_triples: 20
+  top_triples: 100
 
-# 中継の自動公開。番号も金額も、過去録画で各種目3回が一致している。
-# 18:50から結果表を見て、19:00に速報を出す。19:15までに揃わなければ出さない。
+public:
+  cors_origins: []
+  search_rate_per_minute: 60
+  generate_rate_per_minute: 20
+
+# 中継の自動公開。18:50から結果表を見て、19:00に速報を出す。19:15までに揃わなければ出さない。
 live_read:
   publish: true
   confirmations: 3
@@ -129,7 +133,3 @@ live_read:
   publish_at: "19:00"
   window_end: "19:15"
 
-public:
-  cors_origins: []
-  search_rate_per_minute: 60
-  generate_rate_per_minute: 20
