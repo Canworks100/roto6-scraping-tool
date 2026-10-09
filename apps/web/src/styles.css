@@ -2100,6 +2100,13 @@ table.data tbody tr.hot {
   color: transparent;
 }
 
+.grid-table td.meta {
+  width: auto;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+}
+
 .grid-table td.hit {
   background: var(--accent);
   color: var(--ink);

@@ -1940,7 +1940,7 @@ async function renderGrid(game: string, info: GameInfo) {
           const label = isMain || isBonus ? pad2(n) : "";
           return `<td class="${classes}">${label}</td>`;
         }).join("");
-        return `<tr><td class="num"><a href="/${game}/flash/${item.draw_no}" data-link>${formatDraw(item.draw_no)}</a></td><td>${formatDate(item.draw_date)}</td>${cells}</tr>`;
+        return `<tr><td class="num meta"><a href="/${game}/flash/${item.draw_no}" data-link>${formatDraw(item.draw_no)}</a></td><td class="meta">${formatDate(item.draw_date)}</td>${cells}</tr>`;
       })
       .join("");
     root.innerHTML = shell(
