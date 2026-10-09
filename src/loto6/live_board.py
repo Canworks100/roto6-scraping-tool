@@ -13,9 +13,13 @@ from PIL import Image
 
 DIGIT_W = 16
 DIGIT_H = 20
-# 同じ数字の揺れは 60 未満。次点との差が 8 未満のときは採用しない。
+# 本数字の揺れは 60 未満。次点との差が 8 未満のときは採用しない。
 MAX_DISTANCE = 60
 MIN_MARGIN = 8
+# 金額の字は小さい。「1」は本数字より細く、距離 80・差 6 までを同じ数字とする。
+AMOUNT_MAX_DISTANCE = 80
+AMOUNT_MIN_MARGIN = 6
+_UNREAD = object()
 
 TEMPLATES = {
     "0": "00001111111000000001111111111000000111000011110000111000000111000111000000001110011100000000111111100000000011111110000000001111111000000000111111100000000011111110000000001111111000000000111111100000000011110110000000001111011100000000111001110000000011100011100000011100000111100111100000001111111100000000011111100000",
@@ -43,6 +47,8 @@ class BoardRead:
     numbers: tuple[int, ...]
     bonuses: tuple[int, ...]
     draw_no: int | None = None
+    amounts: tuple[int | None, ...] | None = None
+    carryover: int | None = None
 
 
 def read_result_board(
@@ -52,6 +58,7 @@ def read_result_board(
     bonus_count: int,
     min_number: int,
     max_number: int,
+    prize_grades: int = 0,
 ) -> BoardRead | None:
     """結果ボードなら本数字とボーナスを返す。それ以外の画面は None。"""
     rgb = np.asarray(image.convert("RGB"))
@@ -75,7 +82,19 @@ def read_result_board(
         return None
     if not _valid(numbers, bonuses, main_count, bonus_count, min_number, max_number):
         return None
-    return BoardRead(tuple(numbers), tuple(bonuses), _read_draw_no(gray))
+    amounts = None
+    carryover = None
+    if prize_grades > 0:
+        parsed = _read_prize_table(gray, white, prize_grades, min_y=max(box[3] for box in bonus_row) + 4)
+        if parsed is not None:
+            amounts, carryover = parsed
+    return BoardRead(
+        numbers=tuple(numbers),
+        bonuses=tuple(bonuses),
+        draw_no=_read_draw_no(gray),
+        amounts=amounts,
+        carryover=carryover,
+    )
 
 
 def _valid(
@@ -229,7 +248,12 @@ def _split_two(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
     return gray[:, left:split], gray[:, split + 1 : right + 1]
 
 
-def _match_digit(gray: np.ndarray) -> str | None:
+def _match_digit(
+    gray: np.ndarray,
+    *,
+    max_distance: int = MAX_DISTANCE,
+    min_margin: int = MIN_MARGIN,
+) -> str | None:
     bits = _normalize(gray)
     if bits is None:
         return None
@@ -239,9 +263,118 @@ def _match_digit(gray: np.ndarray) -> str | None:
     )
     best, ch = ranked[0]
     second = ranked[1][0]
-    if best > MAX_DISTANCE or second - best < MIN_MARGIN:
+    if best > max_distance or second - best < min_margin:
         return None
     return ch
+
+
+def _read_prize_table(
+    gray: np.ndarray,
+    white: np.ndarray,
+    prize_grades: int,
+    *,
+    min_y: int,
+) -> tuple[tuple[int | None, ...], int | None] | None:
+    """等級の当せん金額と、その次の行のキャリーオーバー。読めない画面は None。"""
+    values: list[int | None] = []
+    for y0, y1 in _white_bands(white):
+        if y0 < min_y:
+            continue
+        amount = _read_amount(gray, y0, y1)
+        if amount is _UNREAD:
+            return None
+        values.append(amount)
+    if values and values[0] is None:
+        values = values[1:]
+    if len(values) < prize_grades:
+        return None
+    amounts = tuple(values[:prize_grades])
+    if all(amount is None for amount in amounts):
+        return None
+    carry = values[prize_grades] if len(values) > prize_grades else None
+    return amounts, carry
+
+
+def _white_bands(white: np.ndarray) -> list[tuple[int, int]]:
+    row = white.mean(axis=1)
+    bands: list[tuple[int, int]] = []
+    start = None
+    for y, frac in enumerate(row):
+        if frac > 0.12 and start is None:
+            start = y
+        elif frac <= 0.12 and start is not None:
+            if y - start >= 28:
+                bands.append((start, y - 1))
+            start = None
+    if start is not None and white.shape[0] - start >= 28:
+        bands.append((start, white.shape[0] - 1))
+    return bands
+
+
+def _read_amount(gray: np.ndarray, y0: int, y1: int) -> int | None | object:
+    width = gray.shape[1]
+    x0 = int(width * 0.55)
+    x1 = int(width * 0.97)
+    if x1 <= x0 or y1 < y0:
+        return None
+    sub = gray[y0 : y1 + 1, x0:x1]
+    chars: list[str | None] = []
+    for left, top, right, bottom in _amount_blobs(sub < 80):
+        if bottom - top + 1 < 14 or not 4 <= right - left + 1 <= 40:
+            continue
+        chars.append(
+            _match_digit(
+                sub[top : bottom + 1, left : right + 1],
+                max_distance=AMOUNT_MAX_DISTANCE,
+                min_margin=AMOUNT_MIN_MARGIN,
+            )
+        )
+    while chars and chars[-1] is None:
+        chars.pop()
+    while chars and chars[0] is None:
+        chars.pop(0)
+    if not chars:
+        return None
+    if any(ch is None for ch in chars):
+        return _UNREAD
+    return int("".join(chars))
+
+
+def _amount_blobs(mask: np.ndarray) -> list[tuple[int, int, int, int]]:
+    height, width = mask.shape
+    seen = np.zeros_like(mask, dtype=bool)
+    raw: list[tuple[int, int, int, int]] = []
+    ys, xs = np.where(mask)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        if seen[y, x]:
+            continue
+        stack = [(y, x)]
+        seen[y, x] = True
+        minx = maxx = x
+        miny = maxy = y
+        area = 0
+        while stack:
+            cy, cx = stack.pop()
+            area += 1
+            minx = min(minx, cx)
+            maxx = max(maxx, cx)
+            miny = min(miny, cy)
+            maxy = max(maxy, cy)
+            for ny, nx in ((cy - 1, cx), (cy + 1, cx), (cy, cx - 1), (cy, cx + 1)):
+                if 0 <= ny < height and 0 <= nx < width and mask[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    stack.append((ny, nx))
+        if area >= 12:
+            raw.append((minx, miny, maxx, maxy))
+    raw.sort()
+    merged: list[list[int]] = []
+    for left, top, right, bottom in raw:
+        if merged and left <= merged[-1][2] + 4:
+            prev = merged[-1]
+            merged[-1] = [min(prev[0], left), min(prev[1], top), max(prev[2], right), max(prev[3], bottom)]
+        else:
+            merged.append([left, top, right, bottom])
+    return [tuple(box) for box in merged]
 
 
 def _normalize(gray: np.ndarray) -> np.ndarray | None:

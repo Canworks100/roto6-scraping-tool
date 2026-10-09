@@ -127,6 +127,34 @@ class FlashArticleTest(unittest.TestCase):
         self.assertIn("1等", updated["title"])
         self.assertNotIn("1等なし", updated["title"])
 
+    def test_live_article_lists_grade_amounts_and_carry(self) -> None:
+        draw = Draw(
+            draw_no=5,
+            draw_date="2026-10-08",
+            numbers=[5, 6, 11, 25, 31, 32],
+            bonus=15,
+            prizes={
+                1: (None, 200_000_000),
+                2: (None, 15_029_600),
+                3: (None, 250_600),
+                4: (None, 5_700),
+                5: (None, 1_000),
+            },
+            carryover_amount=388_848,
+            game="loto6",
+        )
+        self.assertTrue(self.store.save(draw, stage="live"))
+        article = build_article(self.store, GAME, 5)
+        assert article is not None
+        self.assertNotIn("確定後に追記", article["lead"])
+        self.assertIn("200,000,000円", article["lead"])
+        self.assertIn("388,848円", article["lead"])
+        self.assertIn("200,000,000円", article["carry_text"])
+        amounts = [p["amount"] for p in article["item"]["prizes"] if p["grade"] <= 5]
+        self.assertEqual(amounts, [200_000_000, 15_029_600, 250_600, 5_700, 1_000])
+        self.assertEqual(article["item"]["carryover_amount"], 388_848)
+        self.assertEqual(article["item"]["numbers"], [5, 6, 11, 25, 31, 32])
+
 
 if __name__ == "__main__":
     unittest.main()

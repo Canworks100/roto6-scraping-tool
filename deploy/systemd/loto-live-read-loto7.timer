@@ -3,7 +3,7 @@ Description=Loto7 live read on draw nights (Fri)
 
 [Timer]
 Unit=loto-live-read@loto7.service
-OnCalendar=Fri *-*-* 18:40:00
+OnCalendar=Fri *-*-* 18:50:00
 Persistent=true
 
 [Install]

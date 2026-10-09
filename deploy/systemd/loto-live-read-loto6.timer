@@ -3,7 +3,7 @@ Description=Loto6 live read on draw nights (Mon/Thu)
 
 [Timer]
 Unit=loto-live-read@loto6.service
-OnCalendar=Mon,Thu *-*-* 18:40:00
+OnCalendar=Mon,Thu *-*-* 18:50:00
 Persistent=true
 
 [Install]

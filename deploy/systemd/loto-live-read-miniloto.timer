@@ -3,7 +3,7 @@ Description=Miniloto live read on draw nights (Tue)
 
 [Timer]
 Unit=loto-live-read@miniloto.service
-OnCalendar=Tue *-*-* 18:40:00
+OnCalendar=Tue *-*-* 18:50:00
 Persistent=true
 
 [Install]

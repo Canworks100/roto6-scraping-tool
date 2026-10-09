@@ -417,8 +417,9 @@ for game in ("loto6", "loto7", "miniloto"):
     bonus2_col = ", bonus2" if game == "loto7" else ""
     has_stage = any(row[1] == "result_stage" for row in c.execute("PRAGMA table_info(draws)"))
     stage_col = ", result_stage" if has_stage else ""
+    prize_cols = ", ".join(f"prize{g}_amount" for g in range(1, 7))
     hist = c.execute(
-        f"SELECT draw_no, draw_date, {cols}, bonus{bonus2_col}{stage_col} FROM draws WHERE game=? ORDER BY draw_no DESC LIMIT 50",
+        f"SELECT draw_no, draw_date, {cols}, bonus{bonus2_col}{stage_col}, {prize_cols}, carryover_amount FROM draws WHERE game=? ORDER BY draw_no DESC LIMIT 50",
         (game,),
     ).fetchall()
     hist_rows = []
@@ -428,6 +429,8 @@ for game in ("loto6", "loto7", "miniloto"):
             "draw_date": r["draw_date"],
             "numbers": [int(r[f"n{i}"]) for i in range(1, main + 1)],
             "bonus": int(r["bonus"]) if r["bonus"] is not None else None,
+            "prizes": [None if r[f"prize{g}_amount"] is None else int(r[f"prize{g}_amount"]) for g in range(1, 7)],
+            "carryover_amount": None if r["carryover_amount"] is None else int(r["carryover_amount"]),
         }
         if game == "loto7":
             row["bonus2"] = int(r["bonus2"]) if r["bonus2"] is not None else None
@@ -705,10 +708,19 @@ for (const game of GAMES) {
     body += `<h1>${esc(headline)}</h1><p>${dateJa}</p>`;
     let jsonLd = null;
     if (histHit) {
-      if (histHit.result_stage && histHit.result_stage !== "official") {
+      body += `<p>本数字 ${ballsText(histHit.numbers, histHit.bonus)}</p>`;
+      const gradeCount = { loto6: 5, loto7: 6, miniloto: 4 }[game.id] || 5;
+      const prizeValues = (histHit.prizes || []).slice(0, gradeCount);
+      const hasAmount = prizeValues.some((v) => v != null);
+      if (hasAmount) {
+        body += `<ul>${prizeValues
+          .map((v, i) => `<li>${i + 1}等 ${v == null ? "—" : `${Number(v).toLocaleString("ja-JP")}円`}</li>`)
+          .join("")}</ul>`;
+        const carry = histHit.carryover_amount;
+        body += `<p>キャリーオーバー ${carry == null ? "—" : `${Number(carry).toLocaleString("ja-JP")}円`}</p>`;
+      } else if (histHit.result_stage && histHit.result_stage !== "official") {
         body += `<p>速報（当せん金額は確定後に追記）</p>`;
       }
-      body += `<p>本数字 ${ballsText(histHit.numbers, histHit.bonus)}</p>`;
       jsonLd = {
         "@context": "https://schema.org",
         "@graph": [

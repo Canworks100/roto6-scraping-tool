@@ -26,6 +26,18 @@ def _stamp(canvas: np.ndarray, digit: str, x: int, y: int, scale: int = 3) -> No
             ] = color
 
 
+def _amount_band(canvas: np.ndarray, top: int, text: str | None) -> None:
+    canvas[top : top + 46, 700:1240] = (255, 255, 255)
+    if not text:
+        return
+    scale = 2
+    digit_w = DIGIT_W * scale
+    x = 760
+    for ch in text:
+        _stamp(canvas, ch, x, top + 3, scale)
+        x += digit_w + 8
+
+
 def _board(pairs: list[str], bonuses: list[str]) -> Image.Image:
     canvas = np.full((720, 1280, 3), (100, 220, 220), dtype=np.uint8)
     scale = 3
@@ -86,6 +98,36 @@ class SettleTests(unittest.TestCase):
         self.assertEqual(settle([a, a, a], 3), a)
         self.assertIsNone(settle([a, a, a, b, b, b], 3))
         self.assertIsNone(settle([a, a], 3))
+
+    def test_publish_needs_the_same_amounts(self) -> None:
+        rich = BoardRead((1, 2, 3, 4, 5, 6), (7,), amounts=(200, 5700), carryover=300)
+        other = BoardRead((1, 2, 3, 4, 5, 6), (7,), amounts=(200, 5800), carryover=300)
+        plain = BoardRead((1, 2, 3, 4, 5, 6), (7,))
+        self.assertEqual(settle([rich, rich, rich], 3, require_prizes=True), rich)
+        self.assertIsNone(settle([rich, rich, rich, other, other, other], 3, require_prizes=True))
+        self.assertIsNone(settle([plain, plain, plain], 3, require_prizes=True))
+
+
+class PrizeAmountTests(unittest.TestCase):
+    def test_reads_grade_amounts_and_carry(self) -> None:
+        image = _board(["02", "03", "04", "05", "06", "07"], ["08"])
+        canvas = np.asarray(image).copy()
+        _amount_band(canvas, 430, None)
+        _amount_band(canvas, 490, "200")
+        _amount_band(canvas, 550, "5700")
+        _amount_band(canvas, 610, "300")
+        found = read_result_board(
+            Image.fromarray(canvas),
+            main_count=6,
+            bonus_count=1,
+            min_number=1,
+            max_number=43,
+            prize_grades=2,
+        )
+        assert found is not None
+        self.assertEqual(found.numbers, (2, 3, 4, 5, 6, 7))
+        self.assertEqual(found.amounts, (200, 5700))
+        self.assertEqual(found.carryover, 300)
 
 
 class LiveStoreTests(unittest.TestCase):

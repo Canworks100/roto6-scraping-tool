@@ -91,29 +91,39 @@ def parse_live_watch(html: str, game: str) -> tuple[str | None, int | None]:
     return url, draw_no
 
 
-def settle(readings: list[BoardRead], need: int) -> BoardRead | None:
+def settle(readings: list[BoardRead], need: int, *, require_prizes: bool = False) -> BoardRead | None:
     """同じ読みが need 回以上あり、それが一つだけのとき採用する。"""
     if need < 2:
         raise ValueError("確認回数は2以上")
-    counts: Counter[tuple[tuple[int, ...], tuple[int, ...]]] = Counter(
-        (item.numbers, item.bonuses) for item in readings
-    )
-    winners = [key for key, count in counts.items() if count >= need]
+    pool = [item for item in readings if item.amounts is not None] if require_prizes else list(readings)
+
+    def key(item: BoardRead) -> tuple:
+        if require_prizes:
+            return (item.numbers, item.bonuses, item.amounts, item.carryover)
+        return (item.numbers, item.bonuses)
+
+    counts: Counter[tuple] = Counter(key(item) for item in pool)
+    winners = [item_key for item_key, count in counts.items() if count >= need]
     if len(winners) != 1:
         return None
-    numbers, bonuses = winners[0]
-    return BoardRead(numbers, bonuses)
+    chosen = winners[0]
+    for item in pool:
+        if key(item) == chosen:
+            return item
+    return None
 
 
 def _settings(config: dict[str, Any]) -> dict[str, Any]:
     live = config.get("live_read") or {}
-    start = str(live.get("window_start") or "18:40")
-    end = str(live.get("window_end") or "19:05")
+    start = str(live.get("window_start") or "18:50")
+    publish_at = str(live.get("publish_at") or "19:00")
+    end = str(live.get("window_end") or "19:15")
     return {
         "publish": bool(live.get("publish")),
         "confirmations": int(live.get("confirmations") or 3),
         "interval_sec": int(live.get("interval_sec") or 5),
         "window_start": start,
+        "publish_at": publish_at,
         "window_end": end,
     }
 
@@ -124,13 +134,14 @@ def _clock(hhmm: str, day: datetime) -> datetime:
 
 
 def run_live(config: dict[str, Any], game: str) -> int:
-    """抽せん日の 18:40–19:05 に公開ページを見て、確定したら保存する。"""
+    """抽せん日は 18:50 から結果表を見て、19:00 に速報を出す。"""
     from loto6.notify import alert
 
     settings = _settings(config)
     now = datetime.now(JST)
     end = _clock(settings["window_end"], now)
     start = _clock(settings["window_start"], now)
+    publish_at = _clock(settings["publish_at"], now)
     if now >= end:
         alert(f"中継の読み取りは締め時刻を過ぎています game={game}")
         return 0
@@ -150,21 +161,27 @@ def run_live(config: dict[str, Any], game: str) -> int:
         interval_sec=settings["interval_sec"],
         seek_tail_sec=None,
         need=settings["confirmations"],
+        require_prizes=True,
     )
-    settled = settle(readings, settings["confirmations"])
-    if settled is None:
-        alert(f"19:05までに中継の数字を確定できませんでした game={game} 第{draw_no}回")
+    settled = settle(readings, settings["confirmations"], require_prizes=True)
+    if settled is None or settled.amounts is None:
+        alert(f"{settings['window_end']}までに結果表を確定できませんでした game={game} 第{draw_no}回")
         return 0
     logger.info(
-        "[%s] 中継で確定 第%s回 本数字=%s ボーナス=%s",
+        "[%s] 中継で確定 第%s回 本数字=%s ボーナス=%s 金額=%s キャリー=%s",
         game,
         draw_no,
         list(settled.numbers),
         list(settled.bonuses),
+        list(settled.amounts),
+        settled.carryover,
     )
     if not settings["publish"]:
         logger.info("[%s] 自動公開はオフです", game)
         return 0
+    now = datetime.now(JST)
+    if now < publish_at:
+        time.sleep((publish_at - now).total_seconds())
     saved = _save_live(config, game, game_def, draw_no, settled, watch_url)
     if saved:
         logger.info("[%s] 中継の速報を公開しました 第%s回", game, draw_no)
@@ -203,13 +220,17 @@ def _save_live(
     from loto6.storage import Store
 
     grades = int(game_def["prize_grades"])
+    if reading.amounts is None or len(reading.amounts) != grades:
+        logger.info("[%s] 第%s回は等級の金額が揃っていないので保存しません", game, draw_no)
+        return False
     draw = Draw(
         draw_no=draw_no,
         draw_date=datetime.now(JST).date().isoformat(),
         numbers=list(reading.numbers),
         bonus=reading.bonuses[0],
         bonus2=reading.bonuses[1] if len(reading.bonuses) > 1 else None,
-        prizes={grade: (None, None) for grade in range(1, grades + 1)},
+        prizes={grade: (None, reading.amounts[grade - 1]) for grade in range(1, grades + 1)},
+        carryover_amount=reading.carryover,
         source_url=source_url,
         game=game,
     )
@@ -316,6 +337,7 @@ def _sample_player(
     interval_sec: int,
     seek_tail_sec: int | None,
     need: int | None = None,
+    require_prizes: bool = False,
 ) -> list[BoardRead]:
     from playwright.sync_api import sync_playwright
 
@@ -323,6 +345,7 @@ def _sample_player(
     bonus_count = int(game_def["bonus_count"])
     min_number = int(game_def["min_number"])
     max_number = int(game_def["max_number"])
+    prize_grades = int(game_def["prize_grades"])
     readings: list[BoardRead] = []
     with sync_playwright() as playwright:
         browser = _launch(playwright)
@@ -347,6 +370,7 @@ def _sample_player(
                         bonus_count=bonus_count,
                         min_number=min_number,
                         max_number=max_number,
+                        prize_grades=prize_grades,
                     )
                 )
             else:
@@ -359,9 +383,10 @@ def _sample_player(
                             bonus_count=bonus_count,
                             min_number=min_number,
                             max_number=max_number,
+                            prize_grades=prize_grades,
                         )
                     )
-                    if need is not None and settle(readings, need) is not None:
+                    if need is not None and settle(readings, need, require_prizes=require_prizes) is not None:
                         break
                     if until is not None and datetime.now(JST) >= until:
                         break
