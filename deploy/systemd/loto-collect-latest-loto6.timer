@@ -3,13 +3,18 @@ Description=Loto6 latest collect on draw nights (Mon/Thu)
 
 [Timer]
 Unit=loto-collect-latest@loto6.service
-# 開始 20:50: 公式案内の「20:30すぎ照会可」に合わせた想定（楽天 lastresults の実測時刻ではない）
-OnCalendar=Mon,Thu *-*-* 20:50:00
-OnCalendar=Mon,Thu *-*-* 21:05:00
-OnCalendar=Mon,Thu *-*-* 21:20:00
-OnCalendar=Mon,Thu *-*-* 21:35:00
-OnCalendar=Mon,Thu *-*-* 21:55:00
-OnCalendar=Mon,Thu *-*-* 22:20:00
+# 20:15開始、15分おき、最終22:50。ロト6の楽天 lastresults は 2026-10-08 に 20:13〜20:18 掲載。
+OnCalendar=Mon,Thu *-*-* 20:15:00
+OnCalendar=Mon,Thu *-*-* 20:30:00
+OnCalendar=Mon,Thu *-*-* 20:45:00
+OnCalendar=Mon,Thu *-*-* 21:00:00
+OnCalendar=Mon,Thu *-*-* 21:15:00
+OnCalendar=Mon,Thu *-*-* 21:30:00
+OnCalendar=Mon,Thu *-*-* 21:45:00
+OnCalendar=Mon,Thu *-*-* 22:00:00
+OnCalendar=Mon,Thu *-*-* 22:15:00
+OnCalendar=Mon,Thu *-*-* 22:30:00
+OnCalendar=Mon,Thu *-*-* 22:45:00
 OnCalendar=Mon,Thu *-*-* 22:50:00
 Persistent=true
 RandomizedDelaySec=90

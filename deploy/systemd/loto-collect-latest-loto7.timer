@@ -3,12 +3,18 @@ Description=Loto7 latest collect on draw nights (Fri)
 
 [Timer]
 Unit=loto-collect-latest@loto7.service
-OnCalendar=Fri *-*-* 20:50:00
-OnCalendar=Fri *-*-* 21:05:00
-OnCalendar=Fri *-*-* 21:20:00
-OnCalendar=Fri *-*-* 21:35:00
-OnCalendar=Fri *-*-* 21:55:00
-OnCalendar=Fri *-*-* 22:20:00
+# 20:15開始、15分おき、最終22:50。掲載時刻は未計測。実行ログの「当日掲載=yes」で記録する。
+OnCalendar=Fri *-*-* 20:15:00
+OnCalendar=Fri *-*-* 20:30:00
+OnCalendar=Fri *-*-* 20:45:00
+OnCalendar=Fri *-*-* 21:00:00
+OnCalendar=Fri *-*-* 21:15:00
+OnCalendar=Fri *-*-* 21:30:00
+OnCalendar=Fri *-*-* 21:45:00
+OnCalendar=Fri *-*-* 22:00:00
+OnCalendar=Fri *-*-* 22:15:00
+OnCalendar=Fri *-*-* 22:30:00
+OnCalendar=Fri *-*-* 22:45:00
 OnCalendar=Fri *-*-* 22:50:00
 Persistent=true
 RandomizedDelaySec=90

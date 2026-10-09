@@ -94,7 +94,7 @@ export VITE_SITE_ORIGIN=https://lottery-analytics.com
 3. 必要なら `migrate-legacy` → 各種目 `collect --all` → `flash-articles`
 4. `apps/web` で上記オリジン付き `npm run build` → `dist` を `/var/www/loto/`
 5. `deploy/systemd/*` と `deploy/nginx/loto.conf` を配置して enable
-   - 速報＋静的再公開（抽せん曜日・夜複数回）:
+   - 速報＋静的再公開（抽せん曜日、20:15〜22:50 を15分おき、最終 22:50）:
      `loto-collect-latest-loto6.timer`（月木）/ `loto-collect-latest-loto7.timer`（金）/ `loto-collect-latest-miniloto.timer`（火）
      → `collect-and-publish.sh`（`flock` 排他、変更時だけ `SITE_ORIGIN` 付きビルド → `/var/www/loto-stg/`）
    - 中継の読み取り（抽せん曜日 18:50 開始、19:00 に速報、19:15 まで）: `loto-live-read-loto6.timer`（月木）/ `loto-live-read-loto7.timer`（金）/ `loto-live-read-miniloto.timer`（火）。反映後に `sudo -u loto /opt/loto/.venv/bin/playwright install chromium` してからタイマーを有効にする
