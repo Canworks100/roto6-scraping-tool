@@ -204,6 +204,9 @@ export type PairRow = {
   count: number;
   probability: number;
   expected?: number;
+  last_draw_no?: number;
+  last_draw_date?: string;
+  others?: number[];
 };
 
 export type TrendsPayload = {

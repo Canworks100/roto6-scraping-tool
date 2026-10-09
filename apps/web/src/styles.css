@@ -631,6 +631,18 @@ table.data td.nums {
   white-space: normal;
 }
 
+@media (max-width: 600px) {
+  table.pair-table {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  table.pair-table th,
+  table.pair-table td {
+    padding: 4px;
+  }
+}
+
 .ball,
 .bonus {
   display: inline-grid;

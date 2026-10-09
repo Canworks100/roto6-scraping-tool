@@ -100,6 +100,8 @@ def analyze(rows: list[sqlite3.Row], config: dict[str, Any]) -> dict[str, Any]:
         triples_all["expected"] = triple_expected
     pairs_high, pairs_low = _high_low(pairs_all, 30, 10)
     triples_high, triples_low = _high_low(triples_all, 100, 10)
+    triples_high = _with_last_draw(triples_high, number_frame)
+    triples_low = _with_last_draw(triples_low, number_frame)
     odd_even = _odd_even(number_frame, draw_count, main_count)
     sums = _sums(number_frame, draw_count)
     return {
@@ -403,14 +405,17 @@ def _frequency(
 def _cooccurrence(number_frame: pd.DataFrame, size: int, draw_count: int, limit: int | None) -> pd.DataFrame:
     grouped = number_frame.groupby("draw_no")["number"].apply(lambda values: tuple(sorted(int(v) for v in values)))
     counts: dict[tuple[int, ...], int] = {}
-    for numbers in grouped:
+    last_draw: dict[tuple[int, ...], int] = {}
+    for draw_no, numbers in grouped.items():
         for combo in combinations(numbers, size):
             counts[combo] = counts.get(combo, 0) + 1
+            last_draw[combo] = int(draw_no)
     rows = []
     for combo, count in counts.items():
         row = {f"number_{name}": value for name, value in zip("abc", combo)}
         row["count"] = count
         row["probability"] = count / draw_count if draw_count else 0
+        row["last_draw_no"] = last_draw[combo]
         rows.append(row)
     table = pd.DataFrame(rows)
     if table.empty:
@@ -419,6 +424,22 @@ def _cooccurrence(number_frame: pd.DataFrame, size: int, draw_count: int, limit:
     if limit is not None:
         return table.head(limit)
     return table
+
+
+def _with_last_draw(table: pd.DataFrame, number_frame: pd.DataFrame) -> pd.DataFrame:
+    if table.empty:
+        return table
+    hits = number_frame[number_frame["draw_no"].isin(table["last_draw_no"])]
+    dates = hits.groupby("draw_no")["draw_date"].first()
+    mains = hits.groupby("draw_no")["number"].apply(lambda values: sorted(int(v) for v in values))
+    combo_cols = [col for col in ("number_a", "number_b", "number_c") if col in table.columns]
+    out = table.copy()
+    out["last_draw_date"] = [str(dates[no]) for no in out["last_draw_no"]]
+    out["others"] = [
+        [n for n in mains[no] if n not in combo]
+        for no, combo in zip(out["last_draw_no"], out[combo_cols].itertuples(index=False, name=None))
+    ]
+    return out
 
 
 def _high_low(table: pd.DataFrame, high: int, low: int) -> tuple[pd.DataFrame, pd.DataFrame]:

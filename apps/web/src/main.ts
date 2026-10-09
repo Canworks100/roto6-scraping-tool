@@ -1790,12 +1790,13 @@ async function renderFreq(game: string, info: GameInfo) {
 
 function pairTable(game: string, title: string, rows: PairRow[], size: number): string {
   if (!rows.length) return "";
-  return `<div class="box"><h2>${title}</h2><div class="inner pad0"><div class="table-wrap"><table class="data">
-    <thead><tr><th>数字</th><th class="num">回数</th><th class="num">割合</th></tr></thead>
+  return `<div class="box"><h2>${title}</h2><div class="inner pad0"><div class="table-wrap"><table class="data pair-table">
+    <thead><tr><th>数字</th><th class="num">回数</th><th class="num">割合</th><th>最新出現日</th><th>他数字</th></tr></thead>
     <tbody>${rows
       .map((row) => {
         const nums = [row.number_a, row.number_b, row.number_c].filter((n): n is number => n != null).slice(0, size);
-        return `<tr><td>${nums.map((n) => numLink(game, n)).join(" ")}</td><td class="num">${formatTimes(row.count)}</td><td class="num">${(row.probability * 100).toFixed(1)}%</td></tr>`;
+        const others = row.others?.length ? row.others.map((n) => numLink(game, n)).join(" ") : "—";
+        return `<tr><td>${nums.map((n) => numLink(game, n)).join(" ")}</td><td class="num">${formatTimes(row.count)}</td><td class="num">${(row.probability * 100).toFixed(1)}%</td><td>${formatDate(row.last_draw_date)}</td><td class="nums">${others}</td></tr>`;
       })
       .join("")}</tbody></table></div></div></div>`;
 }
