@@ -106,6 +106,7 @@ export const PAGE_LEAD: Record<string, string> = {
   search: "気になる数字が出た回を、まとめて調べられます。",
   trends: "数字ごとの出現回数と、最後に出た回を一覧できます。",
   generate: "出現回数をもとに、次回の組み合わせを作れます。",
+  simu: "口数と数字を入れて、疑似抽せんの結果と収支をその場で確認できます。",
   about: LEGAL_DESC.about,
   disclaimer: LEGAL_DESC.disclaimer,
   privacy: LEGAL_DESC.privacy,
@@ -282,6 +283,10 @@ export function setSeo(path: string, opts?: SeoOpts) {
   } else if (parts[0] === "contact") {
     title = `お問い合わせ｜${SITE}`;
     description = LEGAL_DESC.contact;
+  } else if (parts[0] === "simu") {
+    title = `ロト購入シミュレーター｜${SITE}`;
+    description =
+      "ロト6・ロト7・ミニロトの口数と数字を入れて、疑似抽せんの結果と収支をその場で確認できます。";
   } else if (parts[0] === "404") {
     title = NOT_FOUND_TITLE;
     description = NOT_FOUND_DESC;

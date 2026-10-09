@@ -117,6 +117,7 @@ function renderFooterHtml(catalog: AffItem[]): string {
   return `<aside class="aff-footer" aria-label="管理人のおすすめ書籍">
     <p class="aff-label">管理人のおすすめ書籍</p>
     <div class="aff-grid">${items.map(affCard).join("")}</div>
+    <p class="aff-note">Amazonのアソシエイトとして、LOTO アナリティクスは適格販売により収入を得ています。</p>
   </aside>`;
 }
 

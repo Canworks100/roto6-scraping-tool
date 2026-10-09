@@ -57,6 +57,13 @@ games:
     main_count: 6
     bonus_count: 1
     prize_grades: 5
+    unit_price: 200
+    simu_grade1_base: 200000000
+    simu_prizes:
+      2: 10000000
+      3: 300000
+      4: 6800
+      5: 1000
     current_page: "/takarakuji/check/loto/loto6/index.html"
     summary_csv: "/retail/takarakuji/loto/loto6/csv/loto6.csv"
     draw_csv: "/retail/takarakuji/loto/loto6/csv/A102{draw:04d}.CSV"
@@ -71,6 +78,14 @@ games:
     main_count: 7
     bonus_count: 2
     prize_grades: 6
+    unit_price: 300
+    simu_grade1_base: 400000000
+    simu_prizes:
+      2: 10000000
+      3: 1000000
+      4: 50000
+      5: 7000
+      6: 1000
     current_page: "/takarakuji/check/loto/loto7/index.html"
     summary_csv: "/retail/takarakuji/loto/loto7/csv/loto7.csv"
     draw_csv: "/retail/takarakuji/loto/loto7/csv/A103{draw:04d}.CSV"
@@ -86,6 +101,12 @@ games:
     main_count: 5
     bonus_count: 1
     prize_grades: 4
+    unit_price: 200
+    simu_grade1_base: 30000000
+    simu_prizes:
+      2: 200000
+      3: 6800
+      4: 1000
     current_page: "/takarakuji/check/loto/miniloto/index.html"
     summary_csv: "/retail/takarakuji/loto/miniloto/csv/miniloto.csv"
     draw_csv: "/retail/takarakuji/loto/miniloto/csv/A101{draw:04d}.CSV"

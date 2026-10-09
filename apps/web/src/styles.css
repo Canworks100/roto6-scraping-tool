@@ -1823,6 +1823,13 @@ table.data td.nums {
   line-height: 1.4;
 }
 
+.aff-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .disclaimer {
   margin: 8px 0 0;
   padding: 6px 8px;
@@ -2293,4 +2300,89 @@ table.data tbody tr.hot {
     padding-right: 40px;
     padding-bottom: 24px;
   }
+}
+
+.simu-games {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.simu-cart-title {
+  margin: 16px 0 8px;
+  font-size: 1.05rem;
+}
+
+.simu-cart-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin: 0 0 12px;
+}
+
+.simu-cart-total .play-cost {
+  margin: 0;
+}
+
+.simu-stage {
+  margin-top: 12px;
+}
+
+.simu-draw-body {
+  padding-top: 28px;
+  padding-bottom: 32px;
+}
+
+.simu-draw-balls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 12px;
+  margin: 0 0 24px;
+}
+
+.simu-draw-balls .balls-main,
+.simu-draw-balls .balls-bonus {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.simu-draw-balls .ball,
+.simu-draw-balls .bonus {
+  width: 40px;
+  height: 40px;
+  font-size: 17px;
+}
+
+.simu-draw-meta {
+  margin: 0;
+  padding: 0;
+  line-height: 1.7;
+}
+
+.simu-draw-meta + .simu-draw-meta {
+  margin-top: 6px;
+}
+
+.simu-spin-label {
+  margin: 0 0 12px;
+  color: var(--muted, #666);
+}
+
+@keyframes simu-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+}
+
+.simu-ball-pulse {
+  animation: simu-pulse 0.18s ease-in-out infinite;
 }

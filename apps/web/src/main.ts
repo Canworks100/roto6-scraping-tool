@@ -19,6 +19,7 @@ import { isLegalPage, legalHtml } from "./legal";
 import { guideHtml, guideTitle, isGuideSlug } from "./guides";
 import { loadFavorites, saveFavorites } from "./favorites";
 import { affiliateFooter, hydrateAffiliate } from "./affiliate";
+import { runSimu, SimuError, type SimuGameDef } from "./simu";
 
 const root = document.querySelector("#app")!;
 let games: GameInfo[] = [];
@@ -42,6 +43,7 @@ function parseRoute(): Route {
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const parts = path.split("/").filter(Boolean);
   if (parts.length === 0) return { view: "home" };
+  if (parts[0] === "simu") return { view: "simu" };
   if (isLegalPage(parts[0])) return { view: parts[0] };
   if (parts[1] === "flash") {
     const raw = parts[2] ? Number(parts[2]) : undefined;
@@ -59,13 +61,14 @@ function parseRoute(): Route {
   return { game: parts[0], view };
 }
 
-/** グローバルナビ（種目共通・5本） */
+/** グローバルナビ（種目共通） */
 const GAME_PAGES: [string, string][] = [
   ["latest", "最新結果"],
   ["generate", "次回予想"],
   ["history", "結果一覧"],
   ["analyze", "分析"],
   ["combo", "予想診断"],
+  ["simu", "シミュレーター"],
 ];
 
 const ANALYSIS_PAGES: [string, string, string][] = [
@@ -117,6 +120,7 @@ const VIEW_CRUMB_LABEL: Record<string, string> = {
   generate: "次回予想",
   history: "結果一覧",
   combo: "予想診断",
+  simu: "ロト購入シミュレーター",
   flash: "速報",
   ranks: "金額ランキング",
   search: "数字検索",
@@ -251,10 +255,11 @@ function relatedFor(view: string, game: string, label: string): string {
     ]);
   }
   if (view === "combo") {
-    return relatedBox(game, [
-      ["generate", "次回予想"],
-      ["latest", "最新結果"],
-    ]);
+    return `<div class="box"><h2>関連</h2><div class="inner related-links">
+      <p><a href="${viewPath(game, "generate")}" data-link>次回予想</a></p>
+      <p><a href="${viewPath(game, "latest")}" data-link>最新結果</a></p>
+      <p><a href="/simu?game=${encodeURIComponent(game)}" data-link>ロト購入シミュレーター</a></p>
+    </div></div>`;
   }
   return "";
 }
@@ -405,7 +410,8 @@ function pageLinks(game: string, activeView?: string): string {
   const highlight = navHighlight(activeView);
   return GAME_PAGES.map(([id, label]) => {
     const on = highlight === id;
-    return `<a href="${viewPath(game, id)}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""} data-link>${label}</a>`;
+    const href = id === "simu" ? "/simu" : viewPath(game, id);
+    return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""} data-link>${label}</a>`;
   }).join("");
 }
 
@@ -457,25 +463,35 @@ function crumbOptsFromLocation(view?: string): CrumbOpts {
 function shell(inner: string, activeGame?: string, activeView?: string): string {
   rememberPagesNav();
   const switchView = activeView && activeView !== "home" ? activeView : "hub";
+  const onSimu = activeView === "simu";
   const gameLinks = games
     .map((g) => {
-      const href = activeGame
-        ? viewPath(g.id, switchView === "number" ? "hub" : switchView === "flash" ? "flash" : switchView)
-        : `/${g.id}`;
+      const href = onSimu
+        ? `/simu?game=${encodeURIComponent(g.id)}`
+        : activeGame
+          ? viewPath(g.id, switchView === "number" ? "hub" : switchView === "flash" ? "flash" : switchView)
+          : `/${g.id}`;
       const on = activeGame === g.id;
       return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""} data-link>${g.label}</a>`;
     })
     .join("");
-  const pages = activeGame ? pageLinks(activeGame, activeView) : "";
-  const pagesNav = activeGame ? `<nav class="nav-pages" aria-label="ページ">${pages}</nav>` : "";
+  const navGame = activeGame || games[0]?.id || "loto6";
+  const pages = activeGame || onSimu ? pageLinks(navGame, activeView) : "";
+  const pagesNav = pages ? `<nav class="nav-pages" aria-label="ページ">${pages}</nav>` : "";
   const showCrumb =
-    !!activeGame &&
     !!activeView &&
     activeView !== "home" &&
-    !isLegalPage(activeView);
-  const crumbs = showCrumb
-    ? crumbTrail(activeGame, activeView === "trends" ? "freq" : activeView, crumbOptsFromLocation(activeView))
-    : [];
+    !isLegalPage(activeView) &&
+    (onSimu || !!activeGame);
+  let crumbs: BreadcrumbItem[] = [];
+  if (onSimu) {
+    crumbs = [
+      { name: "ホーム", path: "/" },
+      { name: "ロト購入シミュレーター" },
+    ];
+  } else if (showCrumb && activeGame) {
+    crumbs = crumbTrail(activeGame, activeView === "trends" ? "freq" : activeView, crumbOptsFromLocation(activeView));
+  }
   setBreadcrumbJsonLd(crumbs.length ? crumbs : null);
   const crumbNav = crumbHtml(crumbs);
   const marqueeA = "LOTO ANALYTICS · 当選番号 · 出現回数 · FLASH · ";
@@ -562,6 +578,13 @@ async function render() {
     }
   }
   if (seq !== renderSeq) return;
+
+  if (route.view === "simu") {
+    setSeo(location.pathname);
+    setJsonLd(null);
+    await renderSimu(seq);
+    return;
+  }
 
   if (route.view === "home") {
     await renderHome(seq);
@@ -731,6 +754,7 @@ function gameBlockHtml(opts: {
     hubLink(game, "freq", "出現回数") +
     hubLink(game, "pairs", "組み合わせ");
   const predictLinks = PREDICT_LINKS.map(([id, title]) => hubLink(game, id, title)).join("");
+  const simuLinks = `<li><a href="/simu?game=${encodeURIComponent(game)}" data-link>ロト購入シミュレーター</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`;
   const guides = `<section class="game-block-sec hub-sec">
     <h3>ガイド</h3>
     <ul class="hub-link-list">
@@ -754,6 +778,7 @@ function gameBlockHtml(opts: {
     ${hubSection("結果", resultLinks)}
     ${hubSection("分析", analyzeLinks)}
     ${hubSection("予想", predictLinks)}
+    ${hubSection("シミュレーター", simuLinks)}
     ${guides}
   </article>`;
 }
@@ -1359,6 +1384,363 @@ function comboQs(numbers: number[]): string {
   return numbers.map((n) => `n=${n}`).join("&");
 }
 
+function unitPriceOf(info: GameInfo): number {
+  if (info.unit_price != null && info.unit_price > 0) return info.unit_price;
+  return info.id === "loto7" ? 300 : 200;
+}
+
+/** 全角数字などを半角数字だけにする（口数入力用） */
+function toHalfWidthDigits(raw: string): string {
+  return raw
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[^\d]/g, "");
+}
+
+async function renderSimu(seq: number) {
+  try {
+    games = (await api.listGames()).games;
+  } catch {
+    /* 既存の games を使う */
+  }
+  if (seq !== renderSeq) return;
+  const params = new URLSearchParams(location.search);
+  let gameId = params.get("game") || "loto6";
+  if (!games.find((g) => g.id === gameId)) gameId = games[0]?.id || "loto6";
+  const info = games.find((g) => g.id === gameId)!;
+  const unit = unitPriceOf(info);
+
+  let hand: number[][] = [];
+  let pick: number[] = [];
+  let randomCount = 0;
+
+  const fromQuery = queryNumbers().filter((n) => n >= info.min_number && n <= info.max_number);
+  const uniqueQuery = [...new Set(fromQuery)].sort((a, b) => a - b);
+  if (uniqueQuery.length === info.main_count) {
+    hand = [uniqueQuery];
+  }
+
+  const paint = () => {
+    if (seq !== renderSeq) return;
+    const total = hand.length + randomCount;
+    const cost = total * unit;
+    const gameTabs = games
+      .map(
+        (g) =>
+          `<button type="button" class="btn${g.id === info.id ? " btn-primary" : ""}" data-game="${g.id}">${esc(g.label)}</button>`,
+      )
+      .join("");
+    const cartBodyHtml = () => {
+      const handRows = hand
+        .map((nums, i) => {
+          const balls = nums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("");
+          return `<tr>
+              <td class="num">${i + 1}</td>
+              <td><span class="balls-main">${balls}</span></td>
+              <td><button type="button" class="btn" data-del="${i}">削除</button></td>
+            </tr>`;
+        })
+        .join("");
+      const randomRow =
+        randomCount > 0
+          ? `<tr><td class="num">${hand.length ? "—" : "1"}</td><td>ランダム ${randomCount.toLocaleString("ja-JP")}口</td><td><button type="button" class="btn" id="clear-random">クリア</button></td></tr>`
+          : "";
+      const emptyRow =
+        !hand.length && randomCount < 1
+          ? `<tr><td colspan="3" class="muted">まだ口がありません。数字を足すか、ランダム口数を入れてください。</td></tr>`
+          : "";
+      return `${handRows}${randomRow}${emptyRow}`;
+    };
+
+    const bindCartActions = () => {
+      document.querySelector("#clear-random")?.addEventListener("click", () => {
+        randomCount = 0;
+        const input = document.querySelector("#rnd-count") as HTMLInputElement | null;
+        if (input) input.value = "0";
+        refreshCart();
+      });
+      document.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = Number(btn.dataset.del);
+          hand = hand.filter((_, idx) => idx !== i);
+          refreshCart();
+        });
+      });
+      const drawBtn = document.querySelector("#do-simu") as HTMLButtonElement | null;
+      if (drawBtn) drawBtn.disabled = hand.length + randomCount < 1;
+    };
+
+    const refreshCart = () => {
+      const totalNow = hand.length + randomCount;
+      const costNow = totalNow * unit;
+      const costEl = document.querySelector(".play-cost");
+      if (costEl) {
+        costEl.textContent = `合計 ${totalNow.toLocaleString("ja-JP")}口　／　${formatYen(costNow)}`;
+      }
+      const body = document.querySelector("#cart-body");
+      if (body) body.innerHTML = cartBodyHtml();
+      bindCartActions();
+    };
+
+    root.innerHTML = shell(
+      `
+      <div class="box">
+        <h1>ロト購入シミュレーター</h1>
+        ${howto("種目を選び、数字を足すか口数でランダムを入れて、疑似抽せんの結果を見ます。")}
+        <div class="inner">
+          <div class="toolbar simu-games">${gameTabs}</div>
+          <p class="muted">1口 ${formatYen(unit)}</p>
+          <div class="slots" id="slots"></div>
+          <div class="pad" id="pad" style="margin-top:8px"></div>
+          <div class="toolbar" style="margin:8px 0 0;border:0;padding:0">
+            <button type="button" class="btn btn-primary" id="add-hand">この数字を1口追加</button>
+            <button type="button" class="btn" id="clear-pick">選択クリア</button>
+            <button type="button" class="btn" id="rnd-one">ランダム1口を追加</button>
+          </div>
+          <div class="toolbar" style="margin:12px 0 0;border:0;padding:0;flex-wrap:wrap;gap:8px">
+            <label class="field">ランダム口数
+              <input type="text" inputmode="numeric" pattern="[0-9]*" id="rnd-count" autocomplete="off" value="${randomCount}" />
+            </label>
+            <button type="button" class="btn" id="set-random">ランダム口数を反映</button>
+          </div>
+          <h2 class="simu-cart-title">購入内容</h2>
+          <div class="simu-cart-total">
+            <p class="play-cost">合計 ${total.toLocaleString("ja-JP")}口　／　${formatYen(cost)}</p>
+            <button type="button" class="btn btn-primary" id="do-simu" ${total < 1 ? "disabled" : ""}>抽せんする</button>
+          </div>
+          <div class="table-wrap"><table class="data">
+            <thead><tr><th class="num">#</th><th>数字</th><th></th></tr></thead>
+            <tbody id="cart-body">${cartBodyHtml()}</tbody>
+          </table></div>
+        </div>
+      </div>
+      <div id="simu-stage" class="simu-stage" hidden></div>
+      <div id="result"></div>
+    `,
+      info.id,
+      "simu",
+    );
+
+    const syncPickUi = () => {
+      document.querySelectorAll<HTMLButtonElement>("#pad button").forEach((btn) => {
+        const n = Number(btn.dataset.n);
+        btn.classList.toggle("on", pick.includes(n));
+      });
+      const slots = document.querySelector("#slots");
+      if (!slots) return;
+      const cells = [];
+      for (let i = 0; i < info.main_count; i++) {
+        const n = pick[i];
+        cells.push(`<span class="slot${n ? " on" : ""}">${n ? pad2(n) : "·"}</span>`);
+      }
+      slots.innerHTML = cells.join("");
+    };
+
+    const pad = document.querySelector("#pad")!;
+    for (let n = info.min_number; n <= info.max_number; n++) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = pad2(n);
+      btn.dataset.n = String(n);
+      btn.addEventListener("click", () => {
+        if (pick.includes(n)) pick = pick.filter((x) => x !== n);
+        else if (pick.length < info.main_count) pick = [...pick, n].sort((a, b) => a - b);
+        syncPickUi();
+      });
+      pad.appendChild(btn);
+    }
+    syncPickUi();
+
+    document.querySelectorAll<HTMLButtonElement>("[data-game]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        history.pushState({}, "", `/simu?game=${btn.dataset.game}`);
+        void render();
+      });
+    });
+    document.querySelector("#add-hand")!.addEventListener("click", () => {
+      const box = document.querySelector("#result")!;
+      if (pick.length !== info.main_count) {
+        box.innerHTML = `<p class="error">本数字を${info.main_count}個選んでください</p>`;
+        return;
+      }
+      if (hand.length >= 500) {
+        box.innerHTML = `<p class="error">手選びは500口までです</p>`;
+        return;
+      }
+      hand = [...hand, [...pick]];
+      pick = [];
+      paint();
+    });
+    document.querySelector("#clear-pick")!.addEventListener("click", () => {
+      pick = [];
+      syncPickUi();
+    });
+    document.querySelector("#rnd-one")!.addEventListener("click", () => {
+      const box = document.querySelector("#result")!;
+      if (hand.length >= 500) {
+        box.innerHTML = `<p class="error">手選びは500口までです</p>`;
+        return;
+      }
+      const pool: number[] = [];
+      for (let n = info.min_number; n <= info.max_number; n++) pool.push(n);
+      const nums: number[] = [];
+      while (nums.length < info.main_count) {
+        const i = Math.floor(Math.random() * pool.length);
+        nums.push(pool.splice(i, 1)[0]!);
+      }
+      hand = [...hand, nums.sort((a, b) => a - b)];
+      paint();
+    });
+    const rndInput = document.querySelector("#rnd-count") as HTMLInputElement;
+    const syncRandomFromInput = () => {
+      const digits = toHalfWidthDigits(rndInput.value);
+      if (rndInput.value !== digits) rndInput.value = digits;
+      if (digits === "") {
+        randomCount = 0;
+      } else {
+        const raw = Number(digits);
+        if (Number.isFinite(raw) && Number.isInteger(raw) && raw >= 0) {
+          randomCount = raw;
+        }
+      }
+      refreshCart();
+    };
+    rndInput.addEventListener("input", syncRandomFromInput);
+    rndInput.addEventListener("blur", syncRandomFromInput);
+    document.querySelector("#set-random")!.addEventListener("click", syncRandomFromInput);
+    rndInput.addEventListener("keydown", (ev) => {
+      if ((ev as KeyboardEvent).key === "Enter") {
+        ev.preventDefault();
+        syncRandomFromInput();
+      }
+    });
+    bindCartActions();
+    document.querySelector("#do-simu")!.addEventListener("click", () => {
+      void runDraw();
+    });
+    bindLinks();
+    restorePagesNav();
+  };
+
+  const runDraw = async () => {
+    const total = hand.length + randomCount;
+    const box = document.querySelector("#result")!;
+    const stage = document.querySelector("#simu-stage") as HTMLElement;
+    if (total < 1) {
+      box.innerHTML = `<p class="error">1口以上入れてください</p>`;
+      return;
+    }
+    box.innerHTML = "";
+    stage.hidden = false;
+    stage.innerHTML = `<div class="box simu-draw-box"><h2>抽せん結果</h2><div class="inner simu-draw-body"><p class="simu-spin-label">抽せん中…</p><div class="flash-balls simu-draw-balls simu-spin" id="spin-balls"></div></div></div>`;
+    const spinEl = document.querySelector("#spin-balls")!;
+    let frames = 0;
+    const tick = () => {
+      const pool: number[] = [];
+      for (let n = info.min_number; n <= info.max_number; n++) pool.push(n);
+      const shown: number[] = [];
+      while (shown.length < info.main_count) {
+        const i = Math.floor(Math.random() * pool.length);
+        shown.push(pool.splice(i, 1)[0]!);
+      }
+      spinEl.innerHTML = `<span class="balls-main">${shown
+        .sort((a, b) => a - b)
+        .map((n) => `<span class="ball simu-ball-pulse">${pad2(n)}</span>`)
+        .join("")}</span>`;
+      frames += 1;
+      if (frames < 8) window.setTimeout(tick, 90);
+    };
+    tick();
+
+    try {
+      let carryover: number | null = null;
+      try {
+        const latest = await api.latest(info.id);
+        const raw = latest.item.carryover_amount;
+        carryover = raw == null ? null : Number(raw);
+      } catch {
+        carryover = null;
+      }
+      const gameDef: SimuGameDef = {
+        id: info.id,
+        label: info.label,
+        min_number: info.min_number,
+        max_number: info.max_number,
+        main_count: info.main_count,
+        bonus_count: info.bonus_count,
+        unit_price: unitPriceOf(info),
+        simu_grade1_base: info.simu_grade1_base ?? 0,
+        simu_prizes: info.simu_prizes ?? {},
+      };
+      const res = await runSimu({
+        game: gameDef,
+        tickets: hand,
+        randomCount,
+        carryoverAmount: carryover,
+      });
+      await new Promise((r) => window.setTimeout(r, 720));
+      if (seq !== renderSeq) return;
+      const drawBalls = res.draw.numbers.map((n) => `<span class="ball">${pad2(n)}</span>`).join("");
+      const bonusBalls = res.draw.bonuses.map((n) => `<span class="ball bonus">${pad2(n)}</span>`).join("");
+      stage.innerHTML = `<div class="box simu-draw-box">
+        <h2>抽せん結果</h2>
+        <div class="inner simu-draw-body">
+          <div class="flash-balls simu-draw-balls">
+            <span class="balls-main">${drawBalls}</span>
+            <span class="balls-bonus">${bonusBalls}</span>
+          </div>
+          <p class="muted simu-draw-meta">キャリーオーバー反映 ${formatYen(res.carryover_amount)}</p>
+          <p class="muted simu-draw-meta">1等プール ${formatYen(res.grade1_pool)}</p>
+        </div>
+      </div>`;
+      const gradeChips = res.by_grade
+        .map(
+          (g) =>
+            `<span class="chip">${g.grade}等 ${g.count.toLocaleString("ja-JP")}口　各${formatYen(g.amount_each)}</span>`,
+        )
+        .join("");
+      const detailNote = res.winners_only
+        ? `<p class="muted">${res.detail_threshold}口を超えたため、当たり口だけ表示しています。</p>`
+        : "";
+      const detailRows = res.details
+        .map((d) => {
+          const balls = d.numbers.map((n) => `<span class="ball">${pad2(n)}</span>`).join("");
+          return `<tr>
+            <td class="num">${d.index}</td>
+            <td>${d.source === "hand" ? "手選び" : "ランダム"}</td>
+            <td><span class="balls-main">${balls}</span></td>
+            <td>${d.grade == null ? "—" : `${d.grade}等`}</td>
+            <td class="num">${d.amount ? formatYen(d.amount) : "—"}</td>
+          </tr>`;
+        })
+        .join("");
+      box.innerHTML = `<div class="box">
+        <h2>収支</h2>
+        <div class="play-total">
+          <p class="dx-verdict">${formatYen(res.prize_total)}</p>
+          <p class="dx-summary">払戻合計</p>
+          <p class="play-cost">購入 ${res.ticket_count.toLocaleString("ja-JP")}口　${formatYen(res.cost)}　／　差引 ${formatYen(res.net)}</p>
+        </div>
+        ${gradeChips ? `<div class="chips">${gradeChips}</div>` : `<p class="muted inner">当たりなし</p>`}
+      </div>
+      <div class="box">
+        <h2>明細</h2>
+        ${detailNote}
+        <div class="inner pad0"><div class="table-wrap"><table class="data">
+          <thead><tr><th class="num">#</th><th>種別</th><th>数字</th><th>等級</th><th class="num">金額</th></tr></thead>
+          <tbody>${detailRows || `<tr><td colspan="5" class="muted">表示する口はありません</td></tr>`}</tbody>
+        </table></div></div>
+      </div>`;
+    } catch (err) {
+      stage.hidden = true;
+      stage.innerHTML = "";
+      const msg = err instanceof SimuError ? err.message : (err as Error).message;
+      box.innerHTML = `<p class="error">${esc(msg)}</p>`;
+    }
+  };
+
+  paint();
+}
+
 async function renderCombo(game: string, info: GameInfo) {
   const period = queryPeriod();
   const fromQuery = queryNumbers().filter((n) => n >= info.min_number && n <= info.max_number);
@@ -1536,6 +1918,7 @@ async function renderCombo(game: string, info: GameInfo) {
       : "";
     const box = document.querySelector("#result")!;
     const levelClass = dx?.level ? ` lv${dx.level}` : "";
+    const simuLink = `/simu?game=${encodeURIComponent(game)}&${comboQs(res.numbers)}`;
     box.innerHTML = `
       <div class="box">
         <div class="dx${levelClass}">
@@ -1543,6 +1926,7 @@ async function renderCombo(game: string, info: GameInfo) {
           <p class="dx-summary">${esc(dx?.summary || "")}</p>
         </div>
         <div class="dx-points">${pointHtml}</div>
+        <div class="inner"><p><a href="${simuLink}" data-link>購入シミュレーターで試す</a></p></div>
       </div>
       ${whatifBox}
       <div class="box">
@@ -1567,6 +1951,7 @@ async function renderCombo(game: string, info: GameInfo) {
     try {
       const res = await api.combo(game, selected, period);
       paintResult(res);
+      bindLinks();
     } catch (err) {
       box.innerHTML = `<p class="error">${(err as Error).message}</p>`;
     }

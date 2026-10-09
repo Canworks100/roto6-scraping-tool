@@ -98,6 +98,7 @@ LOTO6通信のトップと中位の取り方:
 
 - `/` は `/loto6` と同じハブ
 - `/about` `/disclaimer` `/privacy` `/terms` `/contact`
+- `/simu`（ロト購入シミュレーター。title に「予想」を付けない）
 - 各種目のハブ、latest、history、freq、pairs、shape、grid、follow、ranks、search、generate、flash 一覧
 - 各種目の速報 直近50回
 - 各種目の数字ページ全件（ロト6は43、ロト7は37、ミニロトは31）

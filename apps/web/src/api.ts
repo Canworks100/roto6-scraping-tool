@@ -6,6 +6,9 @@ export type GameInfo = {
   main_count: number;
   bonus_count: number;
   prize_grades: number;
+  unit_price?: number;
+  simu_grade1_base?: number;
+  simu_prizes?: Record<number, number>;
   ready: boolean;
 };
 
@@ -27,7 +30,14 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || data.error || "通信に失敗しました");
+    const detail = data.detail;
+    const msg =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join("、")
+          : data.error || "通信に失敗しました";
+    throw new Error(msg);
   }
   return data as T;
 }
@@ -359,3 +369,4 @@ export function generate(
     body: JSON.stringify(body),
   });
 }
+

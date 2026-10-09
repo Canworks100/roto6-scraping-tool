@@ -129,6 +129,14 @@ const VIEWS = [
 
 const LEGAL = [
   {
+    path: "/simu",
+    title: `ロト購入シミュレーター｜${SITE}`,
+    h1: "ロト購入シミュレーター",
+    desc: "ロト6・ロト7・ミニロトの口数と数字を入れて、疑似抽せんの結果と収支をその場で確認できます。",
+    body: `<p>種目を選び、数字を足すか口数でランダムを入れて、疑似抽せんの結果を見ます。</p>
+    <p>手選びとランダムを組み合わせて購入内容を作り、短い演出のあと収支と明細を表示します。</p>`,
+  },
+  {
     path: "/about",
     title: `このサイトについて｜${SITE}`,
     h1: "このサイトについて",
@@ -155,7 +163,8 @@ const LEGAL = [
     body: `<p>本サイトは会員登録を行わず、閲覧だけでご利用いただけます。氏名・住所・電話番号などの入力は求めていません。</p>
     <p>数字検索の登録数字は、ブラウザのCookie（loto_fav）に保存します。会員情報としては扱いません。保存期間は最大400日で、ブラウザ側でCookieを削除すると消えます。</p>
     <p>サーバーの運用上、アクセス日時やIPアドレスなどが記録されることがあります。これらは障害対応と不正利用の防止に限り使用します。</p>
-    <p>アクセス解析のため、Googleタグマネージャ（GTM）経由でGoogleアナリティクス（GA4）を利用します。Cookie等により閲覧状況が収集されることがあります。詳細はGoogleのプライバシーポリシーをご確認ください。</p>`,
+    <p>アクセス解析のため、Googleタグマネージャ（GTM）経由でGoogleアナリティクス（GA4）を利用します。Cookie等により閲覧状況が収集されることがあります。詳細はGoogleのプライバシーポリシーをご確認ください。</p>
+    <p>Amazonのアソシエイトとして、LOTO アナリティクスは適格販売により収入を得ています。</p>`,
   },
   {
     path: "/terms",
@@ -400,8 +409,14 @@ function chipNav(game, compact) {
         ["history", "結果一覧"],
         ["analyze", "分析"],
         ["combo", "予想診断"],
+        ["simu", "シミュレーター"],
       ];
-  const links = pages.map(([id, t]) => `<a href="/${game.id}/${id}">${t}</a>`).join("");
+  const links = pages
+    .map(([id, t]) => {
+      const href = id === "simu" ? "/simu" : `/${game.id}/${id}`;
+      return `<a href="${href}">${t}</a>`;
+    })
+    .join("");
   return `<nav class="chip-nav">${links}</nav>`;
 }
 
@@ -496,6 +511,9 @@ function gameBlockBody(game) {
     ${hubSectionList("予想", [
       hubLi(game, "generate", "次回予想"),
       hubLi(game, "combo", "予想診断"),
+    ])}
+    ${hubSectionList("シミュレーター", [
+      `<li><a href="/simu?game=${game.id}">ロト購入シミュレーター</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`,
     ])}
     ${hubSectionList("ガイド", [
       `<li><a href="/${game.id}/guide/how-to-buy">買い方</a></li>`,
@@ -680,11 +698,12 @@ lastmods["/"] =
   db.games?.miniloto?.latest?.draw_date;
 
 for (const page of LEGAL) {
+  const wrapClass = page.path === "/simu" ? "box" : "legal";
   writePage(
     page.path.slice(1),
     page.title,
     page.desc,
-    `<article class="legal"><h1>${page.h1}</h1>${page.body}</article>`,
+    `<article class="${wrapClass}"><h1>${page.h1}</h1>${page.body}</article>`,
   );
   urls.push(page.path);
 }
