@@ -153,4 +153,5 @@ live_read:
   window_start: "18:50"
   publish_at: "19:00"
   window_end: "19:15"
+  recording_end: "20:00"
 

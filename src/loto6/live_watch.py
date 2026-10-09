@@ -13,6 +13,7 @@ import re
 import time
 import urllib.request
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -79,16 +80,67 @@ def parse_backnumber(html: str) -> dict[str, list[dict[str, Any]]]:
     return found
 
 
+@dataclass(frozen=True)
+class WatchLink:
+    """ライブページの視聴ボタン。中継中はライブ、終了後は録画のボタンに替わる。"""
+
+    url: str | None
+    draw_no: int | None
+    recorded: bool
+    label: str
+
+
+_ANCHOR = re.compile(r'<a\b[^>]*?\bhref="([^"]+)"[^>]*>(.*?)</a>', re.S | re.I)
+_WATCH_LABEL = re.compile(r"視聴|再生|配信|動画")
+# 回号の見出しから視聴ボタンまでの距離の上限。見出しとボタンは隣り合っている。
+_NEAR = 2000
+
+
+def find_watch_link(html: str, game: str) -> WatchLink:
+    """その種目の回号の見出しに最も近い視聴ボタンを返す。URLの形は決め打ちしない。"""
+    draw_match = re.search(_CAPTION[game], html)
+    if draw_match is None:
+        return WatchLink(None, None, False, "")
+    draw_no = int(draw_match.group(1))
+    best: tuple[int, str, str] | None = None
+    for anchor in _ANCHOR.finditer(html):
+        href = anchor.group(1).strip()
+        if not href.lower().startswith(("http://", "https://")):
+            continue
+        if anchor.start() >= draw_match.end():
+            distance = anchor.start() - draw_match.end()
+        else:
+            distance = draw_match.start() - anchor.end()
+        if distance < 0 or distance > _NEAR:
+            continue
+        label = re.sub(r"<[^>]+>|\s+", "", anchor.group(2))
+        if not _WATCH_LABEL.search(label):
+            continue
+        if best is None or distance < best[0]:
+            best = (distance, href, label)
+    if best is None:
+        return WatchLink(None, draw_no, False, "")
+    _, href, label = best
+    return WatchLink(href, draw_no, "録画" in label, label)
+
+
 def parse_live_watch(html: str, game: str) -> tuple[str | None, int | None]:
     """ライブページの再生ボタンと、その種目の回号。"""
-    url_match = re.search(
-        r'href="(https://api01-platform\.stream\.co\.jp/apiservice/plt3/[^"]+)"',
-        html,
-    )
-    draw_match = re.search(_CAPTION[game], html)
-    url = url_match.group(1) if url_match else None
-    draw_no = int(draw_match.group(1)) if draw_match else None
-    return url, draw_no
+    link = find_watch_link(html, game)
+    return link.url, link.draw_no
+
+
+def page_links(html: str) -> list[str]:
+    """見つからなかったときの通知用。視聴らしいボタンの文言とリンク（短縮）。"""
+    seen: list[str] = []
+    for anchor in _ANCHOR.finditer(html):
+        label = re.sub(r"<[^>]+>|\s+", "", anchor.group(2))
+        if not _WATCH_LABEL.search(label):
+            continue
+        item = f"{label[:20]} {anchor.group(1).strip()[:100]}"
+        if item not in seen:
+            seen.append(item)
+    return seen[:6]
 
 
 def settle(readings: list[BoardRead], need: int, *, require_prizes: bool = False) -> BoardRead | None:
@@ -118,6 +170,8 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     start = str(live.get("window_start") or "18:50")
     publish_at = str(live.get("publish_at") or "19:00")
     end = str(live.get("window_end") or "19:15")
+    # 中継で確定できなかったときに録画を待つ締め。20:15 からの楽天収集とロックがぶつからない時刻にする。
+    recording_end = str(live.get("recording_end") or "20:00")
     return {
         "publish": bool(live.get("publish")),
         "confirmations": int(live.get("confirmations") or 3),
@@ -125,6 +179,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         "window_start": start,
         "publish_at": publish_at,
         "window_end": end,
+        "recording_end": recording_end,
     }
 
 
@@ -134,7 +189,10 @@ def _clock(hhmm: str, day: datetime) -> datetime:
 
 
 def run_live(config: dict[str, Any], game: str) -> int:
-    """抽せん日は 18:50 から結果表を見て、19:00 に速報を出す。"""
+    """抽せん日は 18:50 から結果表を見て、19:00 に速報を出す。
+
+    中継で確定できなければ、終了後に出る録画の末尾を読む（recording_end まで）。
+    """
     from loto6.notify import alert
 
     settings = _settings(config)
@@ -142,30 +200,59 @@ def run_live(config: dict[str, Any], game: str) -> int:
     end = _clock(settings["window_end"], now)
     start = _clock(settings["window_start"], now)
     publish_at = _clock(settings["publish_at"], now)
-    if now >= end:
-        alert(f"中継の読み取りは締め時刻を過ぎています game={game}")
+    recording_end = _clock(settings["recording_end"], now)
+    if now >= recording_end:
+        alert(f"中継・録画の読み取りは締め時刻を過ぎています game={game}")
         return 0
     if now < start:
         time.sleep((start - now).total_seconds())
 
     game_def = get_game(config, game)
-    watch_url, draw_no = _wait_for_draw(config, game, end)
-    if watch_url is None or draw_no is None:
-        alert(f"中継の視聴ページで当回を確認できませんでした game={game}")
-        return 0
+    need = settings["confirmations"]
+    settled: BoardRead | None = None
+    draw_no: int | None = None
+    watch_url: str | None = None
 
-    readings = _sample_player(
-        watch_url,
-        game_def,
-        until=end,
-        interval_sec=settings["interval_sec"],
-        seek_tail_sec=None,
-        need=settings["confirmations"],
-        require_prizes=True,
-    )
-    settled = settle(readings, settings["confirmations"], require_prizes=True)
-    if settled is None or settled.amounts is None:
-        alert(f"{settings['window_end']}までに結果表を確定できませんでした game={game} 第{draw_no}回")
+    # 1) 中継（ライブのボタン）。録画のボタンが先に出ていたら 2) へ進む。
+    link, seen = _wait_for_draw(config, game, end)
+    if link is not None and not link.recorded:
+        draw_no, watch_url = link.draw_no, link.url
+        logger.info("[%s] 中継を読みます 第%s回 %s", game, draw_no, watch_url)
+        readings = _sample_player(
+            watch_url,
+            game_def,
+            until=end,
+            interval_sec=settings["interval_sec"],
+            seek_tail_sec=None,
+            need=need,
+            require_prizes=True,
+        )
+        settled = settle(readings, need, require_prizes=True)
+        if settled is None:
+            logger.info("[%s] 中継では確定できず 読み取り%s件 録画を待ちます", game, len(readings))
+
+    # 2) 録画（中継で確定できなかったとき、または中継のボタンが無かったとき）。
+    if settled is None:
+        link, seen = _wait_for_draw(config, game, recording_end, recorded_only=True)
+        if link is not None:
+            draw_no, watch_url = link.draw_no, link.url
+            logger.info("[%s] 録画を読みます 第%s回 %s", game, draw_no, watch_url)
+            readings = _sample_player(
+                watch_url,
+                game_def,
+                until=None,
+                interval_sec=2,
+                seek_tail_sec=60,
+            )
+            settled = settle(readings, need, require_prizes=True)
+
+    if settled is None or settled.amounts is None or draw_no is None or watch_url is None:
+        where = f"第{draw_no}回" if draw_no is not None else "当回不明"
+        found = " / ".join(seen) if seen else "なし"
+        alert(
+            f"{settings['recording_end']}までに中継・録画とも結果表を確定できませんでした game={game} {where}"
+            f" ページの視聴ボタン: {found}"
+        )
         return 0
     logger.info(
         "[%s] 中継で確定 第%s回 本数字=%s ボーナス=%s 金額=%s キャリー=%s",
@@ -188,23 +275,48 @@ def run_live(config: dict[str, Any], game: str) -> int:
     return 0
 
 
-def _wait_for_draw(config: dict[str, Any], game: str, end: datetime) -> tuple[str | None, int | None]:
+def _wait_for_draw(
+    config: dict[str, Any],
+    game: str,
+    end: datetime,
+    *,
+    recorded_only: bool = False,
+) -> tuple[WatchLink | None, list[str]]:
+    """当回（DBの最新+1）の視聴ボタンを待つ。録画のボタンが出たらそれも返す。
+
+    戻り値の2つ目は、最後に見たページの視聴ボタン一覧（通知用）。
+    """
     from loto6.storage import Store
 
+    seen: list[str] = []
     store = Store(Path(config["_sqlite_path"]))
     try:
         while datetime.now(JST) < end:
-            html = fetch_text(LIVE_PAGE)
-            url, draw_no = parse_live_watch(html, game)
+            try:
+                html = fetch_text(LIVE_PAGE)
+            except Exception as exc:  # noqa: BLE001 - 一時的な取得失敗は待ち続ける
+                logger.info("[%s] ライブページの取得に失敗 %s", game, exc)
+                time.sleep(30)
+                continue
+            link = find_watch_link(html, game)
+            seen = page_links(html)
             latest = store.latest_draw(game)
             latest_no = int(latest["draw_no"]) if latest is not None else 0
-            if url and draw_no is not None and draw_no == latest_no + 1:
-                return url, draw_no
-            logger.info("[%s] 当回の視聴リンク待ち ページの回=%s 最新=%s", game, draw_no, latest_no)
+            current = link.url and link.draw_no is not None and link.draw_no == latest_no + 1
+            if current and (link.recorded or not recorded_only):
+                return link, seen
+            logger.info(
+                "[%s] 当回の視聴リンク待ち ページの回=%s 最新=%s ボタン=%s%s",
+                game,
+                link.draw_no,
+                latest_no,
+                link.label or "なし",
+                "（録画待ち）" if recorded_only else "",
+            )
             time.sleep(30)
     finally:
         store.close()
-    return None, None
+    return None, seen
 
 
 def _save_live(
