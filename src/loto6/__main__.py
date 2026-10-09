@@ -63,6 +63,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     miss_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
 
+    live_parser = sub.add_parser("live-read", help="抽せん中の公開中継から結果ボードを読む")
+    live_parser.add_argument("--game", required=True, choices=["loto6", "loto7", "miniloto"])
+
+    score_parser = sub.add_parser("live-score", help="公開録画で読み取りの正解率を見る（公開しない）")
+    score_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
+    score_parser.add_argument("--limit", type=int, default=3)
+
     import_parser = sub.add_parser("import-raw", help="data/raw のCSVをデータベースへ入れる")
     import_parser.add_argument("--game", default="loto6", choices=["loto6", "loto7", "miniloto"])
     import_parser.add_argument("--dir", dest="raw_dir", default=None)
@@ -210,6 +217,30 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"OK {game}")
         return exit_code
+    if args.command == "live-read":
+        from loto6.live_watch import run_live
+        from loto6.notify import alert
+
+        try:
+            return run_live(config, args.game)
+        except Exception as exc:  # noqa: BLE001
+            alert(f"中継の読み取りに失敗 game={args.game}: {exc}")
+            raise
+    if args.command == "live-score":
+        from loto6.games import game_ids
+        from loto6.live_watch import score_game
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        failed = False
+        for game in targets:
+            rows = score_game(config, game, limit=args.limit)
+            correct = sum(1 for row in rows if row["ok"])
+            print(f"{game} {correct}/{len(rows)}")
+            for row in rows:
+                print(f"  第{row['draw_no']}回 {'一致' if row['ok'] else '不一致'} read={row['read']} expected={row['expected']}")
+            if correct != len(rows) or not rows:
+                failed = True
+        return 1 if failed else 0
     if args.command == "import-raw":
         raw_dir = Path(args.raw_dir) if args.raw_dir else abs_path(config, "storage.raw_dir")
         import_raw(config, raw_dir=raw_dir, refresh=args.refresh, game=args.game)

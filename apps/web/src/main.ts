@@ -114,11 +114,6 @@ function formatYen(n: number | null | undefined): string {
   return `${n.toLocaleString("ja-JP")}円`;
 }
 
-function formatCountOrMissing(n: number | null | undefined): string {
-  if (n == null) return "未取得";
-  return formatCount(n);
-}
-
 function formatYenOku(n: number): string {
   const oku = Math.floor(n / 100_000_000);
   const man = Math.floor((n % 100_000_000) / 10_000);
@@ -141,6 +136,19 @@ function carryBanner(label: string, amount: number): string {
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "—";
   return `${n.toLocaleString("ja-JP")}口`;
+}
+
+function flashPrizeList(
+  prizes: { grade: number; count?: number | null; amount?: number | null }[],
+): string {
+  if (!prizes.some((p) => p.amount != null || p.count != null)) return "";
+  return `<dl class="flash-prizes">${prizes
+    .map((p) => {
+      const amount = p.amount == null ? "—" : formatYen(p.amount);
+      const count = p.count == null ? "" : `<span>${formatCount(p.count)}</span>`;
+      return `<div><dt>${p.grade}等</dt><dd><strong>${amount}</strong>${count}</dd></div>`;
+    })
+    .join("")}</dl>`;
 }
 
 function prizeHeaders(grades: number): string {
@@ -615,18 +623,7 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
       <h1 class="flash-title">${info.label} 当選番号</h1>
       <p class="muted">${formatDraw(item.draw_no)}（${formatDate(item.draw_date)}）</p>
       <div class="flash-balls">${ballsHtml(item)}</div>
-      ${
-        prizes.some((p) => p.amount != null || p.count != null)
-          ? `<dl class="flash-prizes">${prizes
-              .map(
-                (p) => `<div>
-              <dt>${p.grade}等</dt>
-              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCountOrMissing(p.count)}</span></dd>
-            </div>`,
-              )
-              .join("")}</dl>`
-          : ""
-      }
+      ${flashPrizeList(prizes)}
       <ul class="flash-meta">
         <li>販売実績 ${formatYen(item.sales_amount)}</li>
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
@@ -758,18 +755,7 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
       <p class="flash-date">${formatDate(article.draw_date)}</p>
       <p class="post-lead">${esc(article.lead)}</p>
       <div class="flash-balls">${ballsHtml(item)}</div>
-      ${
-        prizes.some((p) => p.amount != null || p.count != null)
-          ? `<dl class="flash-prizes">${prizes
-              .map(
-                (p) => `<div>
-              <dt>${p.grade}等</dt>
-              <dd><strong>${formatYen(p.amount)}</strong><span>${formatCountOrMissing(p.count)}</span></dd>
-            </div>`,
-              )
-              .join("")}</dl>`
-          : ""
-      }
+      ${flashPrizeList(prizes)}
       ${article.carry_text ? `<p class="post-carry">${esc(article.carry_text)}</p>` : ""}
       <ul class="flash-meta">
         <li>販売実績 ${formatYen(item.sales_amount)}</li>

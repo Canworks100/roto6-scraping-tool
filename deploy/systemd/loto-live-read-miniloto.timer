@@ -1,0 +1,10 @@
+[Unit]
+Description=Miniloto live read on draw nights (Tue)
+
+[Timer]
+Unit=loto-live-read@miniloto.service
+OnCalendar=Tue *-*-* 18:50:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

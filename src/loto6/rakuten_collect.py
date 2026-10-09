@@ -13,12 +13,33 @@ from bs4 import BeautifulSoup
 
 from loto6.client import FetchError, HttpClient
 from loto6.games import get_game
-from loto6.parser import parse_rakuten_lastresults, parse_rakuten_month_html
-from loto6.storage import Store
+from loto6.parser import Draw, parse_rakuten_lastresults, parse_rakuten_month_html
+from loto6.storage import Store, _same_numbers
 
 logger = logging.getLogger("loto6")
 
 SLUG = {"loto6": "loto6", "loto7": "loto7", "miniloto": "mini"}
+_live_mismatch_sent: set[tuple[str, int]] = set()
+
+
+def _note_live_mismatch(store: Store, game: str, draw: Draw) -> None:
+    """中継（live）と楽天の番号が違うときだけ、上書き前に一度通知する。"""
+    existing = store.get_draw(game, draw.draw_no)
+    if existing is None:
+        return
+    stage = existing["result_stage"] if "result_stage" in existing.keys() else "official"
+    if stage != "live":
+        return
+    if _same_numbers(existing, draw):
+        logger.info("[%s] 中継の番号は楽天と一致 第%s回", game, draw.draw_no)
+        return
+    key = (game, int(draw.draw_no))
+    if key in _live_mismatch_sent:
+        return
+    _live_mismatch_sent.add(key)
+    from loto6.notify import alert
+
+    alert(f"中継と楽天の番号が違います。{game} 第{draw.draw_no}回を楽天の値で上書きします。")
 
 
 def _rakuten_cfg(config: dict[str, Any]) -> dict[str, Any]:
@@ -267,6 +288,7 @@ def _ingest_lastresults(
         if draw.draw_no < floor:
             skipped += 1
             continue
+        _note_live_mismatch(store, game, draw)
         if store.save(draw, stage="numbers"):
             inserted += 1
             changed += 1
@@ -324,6 +346,7 @@ def _ingest_month(
     for draw in draws:
         if skip_existing is not None and draw.draw_no in skip_existing and not refresh:
             continue
+        _note_live_mismatch(store, game, draw)
         if store.save(draw, refresh=refresh, stage="official"):
             changed += 1
             saved.append(draw.draw_no)
