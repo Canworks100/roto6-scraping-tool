@@ -114,8 +114,8 @@ function affCard(item: AffItem): string {
 function renderFooterHtml(catalog: AffItem[]): string {
   const items = visibleItems(catalog);
   if (!items.length) return "";
-  return `<aside class="aff-footer" aria-label="PR">
-    <p class="aff-label">PR</p>
+  return `<aside class="aff-footer" aria-label="管理人のおすすめ書籍">
+    <p class="aff-label">管理人のおすすめ書籍</p>
     <div class="aff-grid">${items.map(affCard).join("")}</div>
   </aside>`;
 }

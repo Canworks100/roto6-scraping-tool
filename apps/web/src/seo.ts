@@ -53,6 +53,7 @@ const GUIDE_META: Record<string, { title: string; desc: (label: string) => strin
 
 type GameDescKey =
   | "hub"
+  | "analyze"
   | "latest"
   | "flash"
   | "history"
@@ -68,7 +69,9 @@ type GameDescKey =
 
 const GAME_DESC: Record<GameDescKey, (label: string) => string> = {
   hub: (l) =>
-    `${l}の当選番号や予想、出現の様子へ進む入口です。必要なページへここから辿れます。`,
+    `${l}の当選番号や予想、出現の様子へ進む入口です。結果・分析・予想のページへここから辿れます。`,
+  analyze: (l) =>
+    `${l}の出現回数や組み合わせなど、傾向を見る分析ページへの入口です。`,
   latest: (l) =>
     `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
   flash: (l) =>
@@ -82,9 +85,9 @@ const GAME_DESC: Record<GameDescKey, (label: string) => string> = {
   freq: (l) =>
     `${l}のよく出る数字と出にくい数字を出現回数で一覧。最終出現や空きも見えるので、数字選びの参考になります。`,
   pairs: (l) =>
-    `${l}で同じ回に一緒に出やすい2個や3個の組み合わせを、回数の多い順に整理。相性のよい並びを探すときに使えます。`,
+    `${l}の当選番号で、3個以上一緒に出やすい組み合わせを回数順にまとめています。`,
   shape: (l) =>
-    `${l}の奇数偶数や合計、連番など、本数字の形を開催回数で集計。自分の口の偏りを確認できます。`,
+    `${l}の本数字について、奇数偶数の分かれ方と合計の出方を回数で見られます。`,
   grid: (l) =>
     `${l}の直近開催を出目表で縦に並べ、数字の並びや空きを表のまま追いやすくしました。`,
   follow: (l) =>
@@ -208,6 +211,43 @@ export function setJsonLd(data: Record<string, unknown> | null) {
   el.textContent = JSON.stringify(data);
 }
 
+export type BreadcrumbItem = { name: string; path?: string };
+
+export function breadcrumbJsonLd(items: BreadcrumbItem[]): Record<string, unknown> | null {
+  const list = items.filter((it) => it.name);
+  if (!list.length) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: list.map((it, i) => {
+      const row: Record<string, unknown> = {
+        "@type": "ListItem",
+        position: i + 1,
+        name: it.name,
+      };
+      if (it.path) row.item = absoluteUrl(it.path);
+      return row;
+    }),
+  };
+}
+
+export function setBreadcrumbJsonLd(items: BreadcrumbItem[] | null) {
+  const id = "jsonld-breadcrumb";
+  let el = document.getElementById(id) as HTMLScriptElement | null;
+  const data = items?.length ? breadcrumbJsonLd(items) : null;
+  if (!data) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.id = id;
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(data);
+}
+
 export type SeoOpts = {
   drawDate?: string;
   noindex?: boolean;
@@ -273,8 +313,11 @@ export function setSeo(path: string, opts?: SeoOpts) {
       title = `${label} 数字検索｜出た回をまとめて確認｜${SITE}`;
       description = gameDesc(label, "search");
     } else if (view === "combo") {
-      title = `${label} 組合診断｜1口の所見｜${SITE}`;
+      title = `${label} 予想診断｜1口の所見｜${SITE}`;
       description = gameDesc(label, "combo");
+    } else if (view === "analyze") {
+      title = `${label} 分析｜${SITE}`;
+      description = gameDesc(label, "analyze");
     } else if (view === "freq" || view === "trends") {
       title = `${label} よく出る数字・出現回数｜${SITE}`;
       description = gameDesc(label, "freq");

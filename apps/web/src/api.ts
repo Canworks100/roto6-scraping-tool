@@ -128,12 +128,10 @@ export type ComboPayload = {
   };
   diagnosis?: {
     verdict: string;
-    score: number;
-    base_score?: number;
-    special_score?: number;
+    level?: number;
     summary: string;
-    points: { label: string; score?: number; max?: number; tone: string; text: string }[];
-    special?: { label: string; score: number; tone: string; text: string }[];
+    points: { label: string; tone: string; text: string }[];
+    special?: { label: string; tone: string; text: string }[];
   };
   hits?: ComboHit[];
   whatif?: {

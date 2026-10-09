@@ -10,11 +10,13 @@ import {
   flashNewsJsonLd,
   gameLabel,
   PAGE_LEAD,
+  setBreadcrumbJsonLd,
   setJsonLd,
   setSeo,
+  type BreadcrumbItem,
 } from "./seo";
 import { isLegalPage, legalHtml } from "./legal";
-import { guideHtml, isGuideSlug } from "./guides";
+import { guideHtml, guideTitle, isGuideSlug } from "./guides";
 import { loadFavorites, saveFavorites } from "./favorites";
 import { affiliateFooter, hydrateAffiliate } from "./affiliate";
 
@@ -57,20 +59,205 @@ function parseRoute(): Route {
   return { game: parts[0], view };
 }
 
+/** グローバルナビ（種目共通・5本） */
 const GAME_PAGES: [string, string][] = [
   ["latest", "最新結果"],
   ["generate", "次回予想"],
   ["history", "結果一覧"],
-  ["freq", "出現回数"],
-  ["pairs", "組み合わせ"],
-  ["shape", "奇数偶数"],
-  ["grid", "出目表"],
-  ["follow", "前回を含む回数"],
+  ["analyze", "分析"],
+  ["combo", "予想診断"],
+];
+
+const ANALYSIS_PAGES: [string, string, string][] = [
+  ["freq", "出現回数", "よく出る数字をランキングで見られます。"],
+  ["pairs", "組み合わせ", "3個以上一緒に出やすい組を回数順にまとめます。"],
+  ["shape", "奇数偶数", "奇数偶数の分かれ方と合計の出方を見られます。"],
+  ["grid", "出目表", "直近の本数字を表で縦に並べて追えます。"],
+  ["follow", "前回を含む回数", "前回と同じ数字がまた出た回数を数字ごとに見られます。"],
+];
+
+const RESULT_LINKS: [string, string][] = [
+  ["latest", "最新結果"],
+  ["flash", "速報"],
+  ["history", "結果一覧"],
   ["ranks", "金額ランキング"],
   ["search", "数字検索"],
-  ["combo", "組合診断"],
-  ["flash", "速報"],
 ];
+
+const PREDICT_LINKS: [string, string][] = [
+  ["generate", "次回予想"],
+  ["combo", "予想診断"],
+];
+
+function navHighlight(view?: string): string | undefined {
+  if (!view) return view;
+  if (view === "flash") return "latest";
+  if (view === "ranks" || view === "search") return "history";
+  if (
+    view === "freq" ||
+    view === "pairs" ||
+    view === "shape" ||
+    view === "grid" ||
+    view === "follow" ||
+    view === "trends"
+  ) {
+    return "analyze";
+  }
+  return view;
+}
+
+const VIEW_CRUMB_LABEL: Record<string, string> = {
+  analyze: "分析",
+  freq: "出現回数",
+  pairs: "組み合わせ",
+  shape: "奇数偶数",
+  grid: "出目表",
+  follow: "前回を含む回数",
+  latest: "最新結果",
+  generate: "次回予想",
+  history: "結果一覧",
+  combo: "予想診断",
+  flash: "速報",
+  ranks: "金額ランキング",
+  search: "数字検索",
+};
+
+const ANALYZE_LEAF = new Set(["freq", "pairs", "shape", "grid", "follow"]);
+
+type CrumbOpts = { drawNo?: number; number?: number; guideSlug?: string };
+
+function crumbTrail(game: string, view: string, opts: CrumbOpts = {}): BreadcrumbItem[] {
+  const info = games.find((g) => g.id === game);
+  const label = info?.label || gameLabel(game);
+  const items: BreadcrumbItem[] = [
+    { name: "ホーム", path: "/" },
+    { name: label, path: `/${game}` },
+  ];
+  if (view === "hub") return items;
+  if (view === "guide") {
+    const slug = opts.guideSlug;
+    const title = slug && isGuideSlug(slug) ? guideTitle(slug) : "ガイド";
+    items.push({ name: title });
+    return items;
+  }
+  if (view === "number") {
+    const n = opts.number;
+    items.push({ name: "分析", path: viewPath(game, "analyze") });
+    items.push({ name: "出現回数", path: viewPath(game, "freq") });
+    items.push({ name: n != null ? pad2(n) : "数字" });
+    return items;
+  }
+  if (ANALYZE_LEAF.has(view)) {
+    items.push({ name: "分析", path: viewPath(game, "analyze") });
+    items.push({ name: VIEW_CRUMB_LABEL[view] || view });
+    return items;
+  }
+  if (view === "analyze") {
+    items.push({ name: "分析" });
+    return items;
+  }
+  if (view === "flash" && opts.drawNo != null) {
+    items.push({ name: "速報", path: viewPath(game, "flash") });
+    items.push({ name: formatDraw(opts.drawNo) });
+    return items;
+  }
+  const leaf = VIEW_CRUMB_LABEL[view];
+  if (leaf) {
+    items.push({ name: leaf });
+    return items;
+  }
+  return items;
+}
+
+function crumbHtml(items: BreadcrumbItem[]): string {
+  if (items.length < 2) return "";
+  const parts = items.map((it, i) => {
+    const last = i === items.length - 1;
+    if (last || !it.path) return `<span aria-current="page">${esc(it.name)}</span>`;
+    return `<a href="${it.path}" data-link>${esc(it.name)}</a>`;
+  });
+  return `<nav class="crumb" aria-label="パンくず">${parts.join("<span aria-hidden=\"true\"> / </span>")}</nav>`;
+}
+
+function relatedBox(game: string, links: [string, string][]): string {
+  if (!links.length) return "";
+  return `<div class="box"><h2>関連</h2><div class="inner related-links">
+    ${links.map(([id, label]) => `<p><a href="${viewPath(game, id)}" data-link>${label}</a></p>`).join("")}
+  </div></div>`;
+}
+
+function relatedFor(view: string, game: string, label: string): string {
+  const analyzeTop: [string, string] = ["analyze", `${label}の分析`];
+  if (view === "freq") {
+    return relatedBox(game, [analyzeTop, ["pairs", "組み合わせ"], ["shape", "奇数偶数"]]);
+  }
+  if (view === "pairs") {
+    return relatedBox(game, [analyzeTop, ["freq", "出現回数"], ["shape", "奇数偶数"]]);
+  }
+  if (view === "shape") {
+    return relatedBox(game, [analyzeTop, ["freq", "出現回数"], ["pairs", "組み合わせ"]]);
+  }
+  if (view === "grid") {
+    return relatedBox(game, [analyzeTop, ["freq", "出現回数"], ["follow", "前回を含む回数"]]);
+  }
+  if (view === "follow") {
+    return relatedBox(game, [analyzeTop, ["freq", "出現回数"], ["grid", "出目表"]]);
+  }
+  if (view === "analyze") {
+    return relatedBox(game, [
+      ["freq", "出現回数"],
+      ["pairs", "組み合わせ"],
+      ["generate", "次回予想"],
+    ]);
+  }
+  if (view === "history") {
+    return relatedBox(game, [
+      ["ranks", "金額ランキング"],
+      ["search", "数字検索"],
+      ["latest", "最新結果"],
+    ]);
+  }
+  if (view === "ranks") {
+    return relatedBox(game, [
+      ["history", "結果一覧"],
+      ["search", "数字検索"],
+      ["latest", "最新結果"],
+    ]);
+  }
+  if (view === "search") {
+    return relatedBox(game, [
+      ["history", "結果一覧"],
+      ["ranks", "金額ランキング"],
+      ["latest", "最新結果"],
+    ]);
+  }
+  if (view === "latest") {
+    return relatedBox(game, [
+      ["flash", "速報"],
+      ["history", "結果一覧"],
+      ["generate", "次回予想"],
+    ]);
+  }
+  if (view === "flash") {
+    return relatedBox(game, [
+      ["latest", "最新結果"],
+      ["history", "結果一覧"],
+    ]);
+  }
+  if (view === "generate") {
+    return relatedBox(game, [
+      ["combo", "予想診断"],
+      ["latest", "最新結果"],
+    ]);
+  }
+  if (view === "combo") {
+    return relatedBox(game, [
+      ["generate", "次回予想"],
+      ["latest", "最新結果"],
+    ]);
+  }
+  return "";
+}
 
 function viewPath(game: string, view: string, drawNo?: number): string {
   if (view === "home") return "/";
@@ -80,8 +267,20 @@ function viewPath(game: string, view: string, drawNo?: number): string {
   return `/${game}/${view}`;
 }
 
+if ("scrollRestoration" in history) {
+  history.scrollRestoration = "manual";
+}
+
+/** リンク遷移の描画が終わるまで、先頭へ戻す */
+let scrollToTopOnPaint = false;
+
+function scrollPageTop() {
+  window.scrollTo(0, 0);
+}
+
 function navigate(path: string) {
   history.pushState({}, "", path);
+  scrollToTopOnPaint = true;
   void render();
 }
 
@@ -114,6 +313,11 @@ function formatYen(n: number | null | undefined): string {
   return `${n.toLocaleString("ja-JP")}円`;
 }
 
+function formatCountOrMissing(n: number | null | undefined): string {
+  if (n == null) return "未取得";
+  return formatCount(n);
+}
+
 function formatYenOku(n: number): string {
   const oku = Math.floor(n / 100_000_000);
   const man = Math.floor((n % 100_000_000) / 10_000);
@@ -138,17 +342,13 @@ function formatCount(n: number | null | undefined): string {
   return `${n.toLocaleString("ja-JP")}口`;
 }
 
-function flashPrizeList(
-  prizes: { grade: number; count?: number | null; amount?: number | null }[],
-): string {
-  if (!prizes.some((p) => p.amount != null || p.count != null)) return "";
-  return `<dl class="flash-prizes">${prizes
-    .map((p) => {
-      const amount = p.amount == null ? "—" : formatYen(p.amount);
-      const count = p.count == null ? "" : `<span>${formatCount(p.count)}</span>`;
-      return `<div><dt>${p.grade}等</dt><dd><strong>${amount}</strong>${count}</dd></div>`;
-    })
-    .join("")}</dl>`;
+function formatRank(n: number): string {
+  return `${n}位`;
+}
+
+function formatTimes(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return `${n.toLocaleString("ja-JP")}回`;
 }
 
 function prizeHeaders(grades: number): string {
@@ -202,8 +402,9 @@ function drawRow(item: DrawItem, highlight: number[] = [], extra = "", game?: st
 }
 
 function pageLinks(game: string, activeView?: string): string {
+  const highlight = navHighlight(activeView);
   return GAME_PAGES.map(([id, label]) => {
-    const on = activeView === id;
+    const on = highlight === id;
     return `<a href="${viewPath(game, id)}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""} data-link>${label}</a>`;
   }).join("");
 }
@@ -236,6 +437,23 @@ function howto(text: string): string {
   return `<p class="howto">${text}</p>`;
 }
 
+function crumbOptsFromLocation(view?: string): CrumbOpts {
+  const parts = location.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  const opts: CrumbOpts = {};
+  if (view === "flash" && parts[1] === "flash" && parts[2]) {
+    const n = Number(parts[2]);
+    if (Number.isFinite(n)) opts.drawNo = n;
+  }
+  if (view === "number" && parts[1] === "n" && parts[2]) {
+    const n = Number(parts[2]);
+    if (Number.isFinite(n)) opts.number = n;
+  }
+  if (view === "guide" && parts[1] === "guide" && parts[2]) {
+    opts.guideSlug = parts[2];
+  }
+  return opts;
+}
+
 function shell(inner: string, activeGame?: string, activeView?: string): string {
   rememberPagesNav();
   const switchView = activeView && activeView !== "home" ? activeView : "hub";
@@ -250,6 +468,16 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
     .join("");
   const pages = activeGame ? pageLinks(activeGame, activeView) : "";
   const pagesNav = activeGame ? `<nav class="nav-pages" aria-label="ページ">${pages}</nav>` : "";
+  const showCrumb =
+    !!activeGame &&
+    !!activeView &&
+    activeView !== "home" &&
+    !isLegalPage(activeView);
+  const crumbs = showCrumb
+    ? crumbTrail(activeGame, activeView === "trends" ? "freq" : activeView, crumbOptsFromLocation(activeView))
+    : [];
+  setBreadcrumbJsonLd(crumbs.length ? crumbs : null);
+  const crumbNav = crumbHtml(crumbs);
   const marqueeA = "LOTO ANALYTICS · 当選番号 · 出現回数 · FLASH · ";
   const marqueeB = "ロト6 · ロト7 · ミニロト · 次回予想 · 速報 · ";
   return `
@@ -268,7 +496,7 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
       </div>
       ${pagesNav}
     </header>
-    <main class="body">${inner}</main>
+    <main class="body">${crumbNav}${inner}</main>
     <footer class="footer">
       ${affiliateFooter()}
       <nav class="footer-nav">
@@ -353,6 +581,7 @@ async function render() {
     "flash",
     "history",
     "search",
+    "analyze",
     "freq",
     "pairs",
     "shape",
@@ -381,6 +610,7 @@ async function render() {
     else if (view === "history") await renderHistory(game, info);
     else if (view === "search") await renderSearch(game, info);
     else if (view === "combo") await renderCombo(game, info);
+    else if (view === "analyze") await renderAnalyze(game, info);
     else if (view === "freq") await renderFreq(game, info);
     else if (view === "pairs") await renderPairs(game, info);
     else if (view === "shape") await renderShape(game, info);
@@ -435,12 +665,19 @@ function gameChipNav(game: string, label: string, compact = false): string {
   const pages = items
     .map(([id, title]) => `<a href="${viewPath(game, id)}" data-link>${title}</a>`)
     .join("");
-  const guides = compact
-    ? ""
-    : `<a href="/${game}/guide/how-to-buy" data-link>買い方</a>
-       <a href="/${game}/guide/odds" data-link>確率</a>
-       <a href="/${game}/guide/faq" data-link>FAQ</a>`;
-  return `<nav class="chip-nav" aria-label="${esc(label)}のページ">${pages}${guides}</nav>`;
+  return `<nav class="chip-nav" aria-label="${esc(label)}のページ">${pages}</nav>`;
+}
+
+function hubSection(title: string, linksHtml: string): string {
+  return `<section class="game-block-sec hub-sec">
+    <h3>${esc(title)}</h3>
+    <ul class="hub-link-list">${linksHtml}</ul>
+  </section>`;
+}
+
+function hubLink(game: string, id: string, title: string, note?: string): string {
+  const noteHtml = note ? `<span class="hub-link-note">${esc(note)}</span>` : "";
+  return `<li><a href="${viewPath(game, id)}" data-link>${esc(title)}</a>${noteHtml}</li>`;
 }
 
 function homeGameCardHtml(opts: {
@@ -488,6 +725,20 @@ function gameBlockHtml(opts: {
   const nextLine = pick
     ? `${formatDraw(pick.next_draw_no)}（抽せん日 ${formatDate(pick.next_draw_date)}）`
     : "—";
+  const resultLinks = RESULT_LINKS.map(([id, title]) => hubLink(game, id, title)).join("");
+  const analyzeLinks =
+    hubLink(game, "analyze", "分析トップ", "出現・組み合わせなど") +
+    hubLink(game, "freq", "出現回数") +
+    hubLink(game, "pairs", "組み合わせ");
+  const predictLinks = PREDICT_LINKS.map(([id, title]) => hubLink(game, id, title)).join("");
+  const guides = `<section class="game-block-sec hub-sec">
+    <h3>ガイド</h3>
+    <ul class="hub-link-list">
+      <li><a href="/${game}/guide/how-to-buy" data-link>買い方</a></li>
+      <li><a href="/${game}/guide/odds" data-link>確率</a></li>
+      <li><a href="/${game}/guide/faq" data-link>FAQ</a></li>
+    </ul>
+  </section>`;
   return `<article class="game-block box">
     <${H} class="game-block-title">${esc(label)}</${H}>
     <section class="game-block-sec">
@@ -500,10 +751,10 @@ function gameBlockHtml(opts: {
       <p class="muted">${esc(nextLine)}</p>
       <div class="flash-balls">${pick ? numberBalls(pick.next) : "—"}</div>
     </section>
-    <section class="game-block-sec">
-      <h3>${esc(label)}のページ</h3>
-      ${gameChipNav(game, label)}
-    </section>
+    ${hubSection("結果", resultLinks)}
+    ${hubSection("分析", analyzeLinks)}
+    ${hubSection("予想", predictLinks)}
+    ${guides}
   </article>`;
 }
 
@@ -530,7 +781,7 @@ async function renderHome(seq: number) {
   setSeo("/");
   setJsonLd(null);
   const cards = [];
-  const dirRows = [];
+  const hubLinks = [];
   for (const g of games) {
     if (seq !== renderSeq) return;
     const { latest, pick } = await loadLatestAndPick(g.id);
@@ -542,10 +793,9 @@ async function renderHome(seq: number) {
         pick,
       }),
     );
-    dirRows.push(`<div class="home-dir-row">
-      <h3><a href="/${g.id}" data-link>${esc(g.label)}</a></h3>
-      ${gameChipNav(g.id, g.label)}
-    </div>`);
+    hubLinks.push(
+      `<li><a href="/${g.id}" data-link>${esc(g.label)}のページへ</a></li>`,
+    );
   }
   paint(
     seq,
@@ -559,14 +809,36 @@ async function renderHome(seq: number) {
       <div class="home-kpi">${cards.join("")}</div>
     </section>
     <section class="box home-dirs">
-      <h2>ページ一覧</h2>
-      <div class="inner">${dirRows.join("")}</div>
+      <h2>くじ種別</h2>
+      <div class="inner"><ul class="hub-link-list">${hubLinks.join("")}</ul></div>
     </section>
   `,
       undefined,
       "home",
     ),
   );
+}
+
+async function renderAnalyze(game: string, info: GameInfo) {
+  setSeo(`/${game}/analyze`);
+  const items = ANALYSIS_PAGES.map(
+    ([id, title, blurb]) =>
+      `<li class="analyze-item">
+        <a href="${viewPath(game, id)}" data-link>${esc(title)}</a>
+        <p class="muted">${esc(blurb)}</p>
+      </li>`,
+  ).join("");
+  root.innerHTML = shell(
+    `<div class="box">
+      <h1>${info.label} 分析</h1>
+      ${howto("出現の様子や組み合わせなど、傾向を見るページへの入口です。")}
+      <ul class="analyze-list">${items}</ul>
+    </div>
+    ${relatedFor("analyze", game, info.label)}`,
+    game,
+    "analyze",
+  );
+  bindLinks();
 }
 
 async function renderHub(game: string, info: GameInfo, seq: number) {
@@ -623,7 +895,18 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
       <h1 class="flash-title">${info.label} 当選番号</h1>
       <p class="muted">${formatDraw(item.draw_no)}（${formatDate(item.draw_date)}）</p>
       <div class="flash-balls">${ballsHtml(item)}</div>
-      ${flashPrizeList(prizes)}
+      ${
+        prizes.some((p) => p.amount != null || p.count != null)
+          ? `<dl class="flash-prizes">${prizes
+              .map(
+                (p) => `<div>
+              <dt>${p.grade}等</dt>
+              <dd><strong>${p.amount == null ? "—" : formatYen(p.amount)}</strong>${p.count == null ? "" : `<span>${formatCount(p.count)}</span>`}</dd>
+            </div>`,
+              )
+              .join("")}</dl>`
+          : ""
+      }
       <ul class="flash-meta">
         <li>販売実績 ${formatYen(item.sales_amount)}</li>
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
@@ -650,6 +933,7 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
         }
       </div>
     </div>
+    ${relatedFor("latest", game, info.label)}
   `,
       game,
       "latest",
@@ -677,6 +961,7 @@ async function renderFlash(game: string, info: GameInfo, drawNo?: number) {
           : ""
       }
     </div>
+    ${relatedFor("flash", game, info.label)}
   `,
     game,
     "flash",
@@ -755,7 +1040,18 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
       <p class="flash-date">${formatDate(article.draw_date)}</p>
       <p class="post-lead">${esc(article.lead)}</p>
       <div class="flash-balls">${ballsHtml(item)}</div>
-      ${flashPrizeList(prizes)}
+      ${
+        prizes.some((p) => p.amount != null || p.count != null)
+          ? `<dl class="flash-prizes">${prizes
+              .map(
+                (p) => `<div>
+              <dt>${p.grade}等</dt>
+              <dd><strong>${p.amount == null ? "—" : formatYen(p.amount)}</strong>${p.count == null ? "" : `<span>${formatCount(p.count)}</span>`}</dd>
+            </div>`,
+              )
+              .join("")}</dl>`
+          : ""
+      }
       ${article.carry_text ? `<p class="post-carry">${esc(article.carry_text)}</p>` : ""}
       <ul class="flash-meta">
         <li>販売実績 ${formatYen(item.sales_amount)}</li>
@@ -873,6 +1169,7 @@ async function renderHistory(game: string, info: GameInfo) {
         </div>
       </div>
     </div>
+    ${relatedFor("history", game, info.label)}
   `,
     game,
     "history",
@@ -940,6 +1237,7 @@ async function renderSearch(game: string, info: GameInfo) {
       </div>
     </div>
     <div id="result"></div>
+    ${relatedFor("search", game, info.label)}
   `,
     game,
     "search",
@@ -1071,7 +1369,7 @@ async function renderCombo(game: string, info: GameInfo) {
   root.innerHTML = shell(
     `
     <div class="box">
-      <h1>${info.label} 組合診断</h1>
+      <h1>${info.label} 予想診断</h1>
       ${howto("1口の形と、過去にどれくらい出たかを見ます。")}
       ${periodBar(game, "combo", period, drawCount, undefined, comboQs(selected))}
       <div class="inner">
@@ -1095,6 +1393,7 @@ async function renderCombo(game: string, info: GameInfo) {
       </div>
     </div>
     <div id="result"></div>
+    ${relatedFor("combo", game, info.label)}
   `,
     game,
     "combo",
@@ -1178,25 +1477,24 @@ async function renderCombo(game: string, info: GameInfo) {
     const matchRows = res.match_hist
       .slice()
       .reverse()
-      .map((row) => `<tr><td>本数字 ${row.match_count}個</td><td class="num">${row.draws}</td></tr>`)
+      .map((row) => `<tr><td>本数字 ${row.match_count}個</td><td class="num">${formatTimes(row.draws)}</td></tr>`)
       .join("");
     const numRows = res.numbers_stats
       .map(
         (s) =>
-          `<tr><td>${pad2(s.number)}</td><td class="num">${s.count}</td><td class="num">${Math.round(s.expected)}</td><td class="num">${s.vs_expected > 0 ? "+" : ""}${s.vs_expected}</td><td>${s.last_draw_no ? formatDraw(s.last_draw_no) : "—"}</td></tr>`,
+          `<tr><td>${pad2(s.number)}</td><td class="num">${formatTimes(s.count)}</td><td>${s.last_draw_no ? formatDraw(s.last_draw_no) : "—"}</td></tr>`,
       )
       .join("");
     const pointHtml = (dx?.points || [])
-      .map((p) => {
-        const pts =
-          p.score != null && p.max != null ? `<span class="dx-pts">${p.score}/${p.max}</span>` : "";
-        return `<div class="dx-point ${esc(p.tone)}"><strong>${esc(p.label)}${pts}</strong><p>${esc(p.text)}</p></div>`;
-      })
+      .map(
+        (p) =>
+          `<div class="dx-point ${esc(p.tone)}"><strong>${esc(p.label)}</strong><p>${esc(p.text)}</p></div>`,
+      )
       .join("");
     const specialHtml = (dx?.special || [])
       .map(
         (s) =>
-          `<div class="dx-point ${esc(s.tone)}"><strong>${esc(s.label)}<span class="dx-pts">${s.score > 0 ? "+" : ""}${s.score}</span></strong><p>${esc(s.text)}</p></div>`,
+          `<div class="dx-point ${esc(s.tone)}"><strong>${esc(s.label)}</strong><p>${esc(s.text)}</p></div>`,
       )
       .join("");
     const w = res.whatif;
@@ -1243,23 +1541,24 @@ async function renderCombo(game: string, info: GameInfo) {
       </div>`
       : "";
     const box = document.querySelector("#result")!;
+    const levelClass = dx?.level ? ` lv${dx.level}` : "";
     box.innerHTML = `
       <div class="box">
-        <div class="dx">
+        <div class="dx${levelClass}">
           <p class="dx-verdict">${esc(dx?.verdict || "—")}</p>
           <p class="dx-summary">${esc(dx?.summary || "")}</p>
         </div>
         <div class="dx-points">${pointHtml}</div>
         ${
           specialHtml
-            ? `<div class="dx-special"><h2 class="dx-special-title">特殊点</h2><div class="dx-points">${specialHtml}</div></div>`
+            ? `<div class="dx-special"><h2 class="dx-special-title">注意</h2><div class="dx-points">${specialHtml}</div></div>`
             : ""
         }
       </div>
       ${whatifBox}
       <div class="box">
         <h2>各数字の出現</h2>
-        <div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th>数字</th><th class="num">本数字</th><th class="num">期待回数</th><th class="num">対期待</th><th>最終</th></tr></thead><tbody>${numRows}</tbody></table></div></div>
+        <div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th>数字</th><th class="num">本数字</th><th>最終</th></tr></thead><tbody>${numRows}</tbody></table></div></div>
       </div>
       <div class="box">
         <h2>過去との照合（${res.draw_count.toLocaleString("ja-JP")}回）</h2>
@@ -1422,79 +1721,73 @@ async function renderFreq(game: string, info: GameInfo) {
   const data = await api.trends(game, period);
   const rows = data.frequency || [];
   const drawCount = periodDrawTotal(data.meta, info.max_number);
-  let mode: "main" | "bonus" | "both" = "main";
-  let sort: "hot" | "cold" | "rest" | "num" = "hot";
+  let sort: "hot" | "cold" | "bonus" | "rest" | "num" = "hot";
 
   const paint = () => {
-    const valued = rows.map((row) => {
-      const count = mode === "main" ? row.count : mode === "bonus" ? row.bonus_count || 0 : row.main_plus_bonus || 0;
-      const expected = mode === "bonus" ? row.expected_bonus || 0 : row.expected_main || 0;
-      const since = mode === "bonus" ? row.bonus_draws_since_last : row.draws_since_last;
-      const last = mode === "bonus" ? row.bonus_last_draw_date : row.last_draw_date;
-      const rest = mode === "bonus" ? row.bonus_max_rest : row.max_rest;
-      const streak = mode === "bonus" ? row.bonus_max_streak : row.max_streak;
-      return { row, count, expected, since, last, rest, streak };
-    });
+    const valued = rows.map((row) => ({
+      row,
+      main: row.count,
+      bonus: row.bonus_count || 0,
+      since: row.draws_since_last,
+      last: row.last_draw_date,
+    }));
     const sorted = [...valued].sort((a, b) => {
-      if (sort === "cold") return a.count - b.count || a.row.number - b.row.number;
+      if (sort === "cold") return a.main - b.main || a.row.number - b.row.number;
+      if (sort === "bonus") return b.bonus - a.bonus || a.row.number - b.row.number;
       if (sort === "rest") return (b.since || 0) - (a.since || 0) || a.row.number - b.row.number;
       if (sort === "num") return a.row.number - b.row.number;
-      return b.count - a.count || a.row.number - b.row.number;
+      return b.main - a.main || a.row.number - b.row.number;
     });
     const freqBox = data.error
       ? `<p class="error">${data.error}</p>`
       : `<div class="box">
       <h1>${info.label} よく出る数字・出現回数</h1>
-      ${howto("数字ごとの出現回数。期間と、本数字／ボーナスを切り替えられます。")}
-      ${periodBar(game, "freq", period, drawCount)}
+      ${howto("数字ごとの出現回数です。本数字とボーナスを並べて見られます。")}
+      <div class="filter-row">
+        <span class="filter-label">期間</span>
+        ${periodBar(game, "freq", period, drawCount)}
+      </div>
       ${rangeLine(data.meta)}
-      <div class="period-bar">
-        <button type="button" class="chip-btn${mode === "main" ? " on" : ""}" data-mode="main">本数字</button>
-        <button type="button" class="chip-btn${mode === "bonus" ? " on" : ""}" data-mode="bonus">ボーナス</button>
-        <button type="button" class="chip-btn${mode === "both" ? " on" : ""}" data-mode="both">本＋ボーナス</button>
-        <button type="button" class="chip-btn${sort === "hot" ? " on" : ""}" data-sort="hot">多い順</button>
-        <button type="button" class="chip-btn${sort === "cold" ? " on" : ""}" data-sort="cold">少ない順</button>
-        <button type="button" class="chip-btn${sort === "rest" ? " on" : ""}" data-sort="rest">未出現が長い順</button>
-        <button type="button" class="chip-btn${sort === "num" ? " on" : ""}" data-sort="num">数字順</button>
+      <div class="filter-row" role="group" aria-label="並び">
+        <span class="filter-label">並び</span>
+        <div class="period-bar">
+          <button type="button" class="chip-btn${sort === "hot" ? " on" : ""}" data-sort="hot">本数字が多い順</button>
+          <button type="button" class="chip-btn${sort === "cold" ? " on" : ""}" data-sort="cold">本数字が少ない順</button>
+          <button type="button" class="chip-btn${sort === "bonus" ? " on" : ""}" data-sort="bonus">ボーナスが多い順</button>
+          <button type="button" class="chip-btn${sort === "rest" ? " on" : ""}" data-sort="rest">空きが長い順</button>
+          <button type="button" class="chip-btn${sort === "num" ? " on" : ""}" data-sort="num">数字順</button>
+        </div>
       </div>
       <div class="inner pad0">
         <div class="table-wrap">
-          <table class="data">
-            <thead><tr><th class="num">順位</th><th class="num">数字</th><th class="num">本数字</th><th class="num">割合</th><th class="num">期待回数</th><th class="num">対期待</th><th class="num">ボーナス</th><th class="num">本＋ボーナス</th><th>最終</th><th class="num">経過</th><th class="num">最長空白</th><th class="num">最長連続</th></tr></thead>
+          <table class="data freq-table">
+            <thead><tr>
+              <th class="num">順位</th>
+              <th class="num">数字</th>
+              <th class="num">本数字</th>
+              <th class="num">ボーナス</th>
+              <th>最後の本数字</th>
+              <th class="num">今の空き</th>
+            </tr></thead>
             <tbody>
               ${sorted
-                .map((s, i) => {
-                  const expected = mode === "bonus" ? s.row.expected_bonus || 0 : s.row.expected_main || 0;
-                  const countForProb = mode === "main" ? s.row.count : s.count;
-                  const prob = data.meta?.draw_count ? countForProb / Number(data.meta.draw_count) : 0;
-                  return `<tr>
-                    <td class="num">${i + 1}</td>
+                .map(
+                  (s, i) => `<tr>
+                    <td class="num">${formatRank(i + 1)}</td>
                     <td class="num">${numLink(game, s.row.number)}</td>
-                    <td class="num">${s.row.count}</td>
-                    <td class="num">${(prob * 100).toFixed(1)}%</td>
-                    <td class="num">${roundInt(expected)}</td>
-                    <td class="num">${Math.round(s.count - expected)}</td>
-                    <td class="num">${s.row.bonus_count ?? 0}</td>
-                    <td class="num">${s.row.main_plus_bonus ?? 0}</td>
+                    <td class="num">${formatTimes(s.main)}</td>
+                    <td class="num">${formatTimes(s.bonus)}</td>
                     <td>${formatDate(s.last)}</td>
                     <td class="num">${sinceLabel(s.since)}</td>
-                    <td class="num">${s.rest ?? "—"}</td>
-                    <td class="num">${s.streak ?? "—"}</td>
-                  </tr>`;
-                })
+                  </tr>`,
+                )
                 .join("")}
             </tbody>
           </table>
         </div>
       </div>
     </div>`;
-    root.innerHTML = shell(`${freqBox}`, game, "freq");
-    root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        mode = btn.dataset.mode as typeof mode;
-        paint();
-      });
-    });
+    root.innerHTML = shell(`${freqBox}${relatedFor("freq", game, info.label)}`, game, "freq");
     root.querySelectorAll<HTMLButtonElement>("[data-sort]").forEach((btn) => {
       btn.addEventListener("click", () => {
         sort = btn.dataset.sort as typeof sort;
@@ -1509,11 +1802,11 @@ async function renderFreq(game: string, info: GameInfo) {
 function pairTable(game: string, title: string, rows: PairRow[], size: number): string {
   if (!rows.length) return "";
   return `<div class="box"><h2>${title}</h2><div class="inner pad0"><div class="table-wrap"><table class="data">
-    <thead><tr><th>数字</th><th class="num">回数</th><th class="num">割合</th><th class="num">期待回数</th></tr></thead>
+    <thead><tr><th>数字</th><th class="num">回数</th><th class="num">割合</th></tr></thead>
     <tbody>${rows
       .map((row) => {
         const nums = [row.number_a, row.number_b, row.number_c].filter((n): n is number => n != null).slice(0, size);
-        return `<tr><td>${nums.map((n) => numLink(game, n)).join(" ")}</td><td class="num">${row.count}</td><td class="num">${(row.probability * 100).toFixed(1)}%</td><td class="num">${roundInt(row.expected || 0)}</td></tr>`;
+        return `<tr><td>${nums.map((n) => numLink(game, n)).join(" ")}</td><td class="num">${formatTimes(row.count)}</td><td class="num">${(row.probability * 100).toFixed(1)}%</td></tr>`;
       })
       .join("")}</tbody></table></div></div></div>`;
 }
@@ -1522,14 +1815,13 @@ async function renderPairs(game: string, info: GameInfo) {
   const period = queryPeriod();
   const data = await api.trends(game, period);
   const drawCount = periodDrawTotal(data.meta);
+  const triples = (data.triples_high || data.triples || []).slice(0, 100);
   root.innerHTML = shell(
     `<div class="box"><h1>${info.label} よく出る組み合わせ</h1>
-     ${howto("同じ回に一緒に出た組み合わせ。上は多い組、下は少ない組。")}
+     ${howto("3個以上一緒に出やすい組を、回数の多い順に見られます。")}
      ${periodBar(game, "pairs", period, drawCount)}${rangeLine(data.meta)}</div>
-     ${pairTable(game, "2個 上位", data.pairs_high || data.pairs || [], 2)}
-     ${pairTable(game, "2個 下位", data.pairs_low || [], 2)}
-     ${pairTable(game, "3個 上位", data.triples_high || data.triples || [], 3)}
-     ${pairTable(game, "3個 下位", data.triples_low || [], 3)}`,
+     ${pairTable(game, "3個以上（上位100）", triples, 3)}
+     ${relatedFor("pairs", game, info.label)}`,
     game,
     "pairs",
   );
@@ -1558,21 +1850,11 @@ async function renderShape(game: string, info: GameInfo) {
     bindLinks();
     return;
   }
-  const week = ["月", "火", "水", "木", "金", "土", "日"];
   const main = info.main_count;
   const maxBin = Math.max(...shape.sum_bins.map((b) => b.draws), 1);
   const sumPeakBin = shape.sum_bins.reduce((a, b) => (b.draws > a.draws ? b : a), shape.sum_bins[0]);
   const sumPeakRange = sumPeakBin ? sumPeakBin.label.replace("-", "〜") : "";
   const oddPeak = Math.max(...shape.odd_even.map((r) => r.draws), 0);
-  const pairPeak = Math.max(...shape.consecutive_pairs.map((r) => r.draws), 0);
-  const runPeak = Math.max(...shape.consecutive_run.map((r) => r.draws), 0);
-  const digitPeak = Math.max(...shape.last_digit.map((r) => r.count), 0);
-  const spanPeak = Math.max(...shape.span.items.map((r) => r.draws), 0);
-  const bands3 = shape.bands.filter((b) => b.id.startsWith("3"));
-  const bands6 = shape.bands.filter((b) => b.id.startsWith("s"));
-  const band3Peak = Math.max(...bands3.map((b) => b.count), 0);
-  const band6Peak = Math.max(...bands6.map((b) => b.count), 0);
-  const bandRange = bands3.map((b) => `${b.label}${b.min}〜${b.max}`).join("、");
   const oddTop = shape.odd_even.length
     ? shape.odd_even.reduce((a, b) => (b.draws > a.draws ? b : a))
     : null;
@@ -1580,15 +1862,10 @@ async function renderShape(game: string, info: GameInfo) {
   root.innerHTML = shell(
     `<div class="box">
       <h1>${info.label} 奇数偶数・合計</h1>
-      ${howto("奇数偶数や合計、連番など、口の形を回数で見られます。")}
+      ${howto("奇数偶数の分かれ方と、合計の出方を回数で見られます。")}
       ${shapeJump([
         ["odd-even", "奇数偶数"],
         ["sum", "合計"],
-        ["seq", "連番"],
-        ["digit", "一の位"],
-        ["span", "最小と最大の差"],
-        ["band", "数字の帯"],
-        ["weekday", "抽せん曜日"],
       ])}
       ${periodBar(game, "shape", period, drawCount)}${rangeLine(data.meta)}
     </div>
@@ -1600,7 +1877,7 @@ async function renderShape(game: string, info: GameInfo) {
       <tbody>${shape.odd_even
         .map(
           (r) =>
-            `<tr class="${peakClass(r.draws, oddPeak)}"><td>偶数${r.even_count}個・奇数${r.odd_count}個</td><td class="num">${r.draws}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`,
+            `<tr class="${peakClass(r.draws, oddPeak)}"><td>偶数${r.even_count}個・奇数${r.odd_count}個</td><td class="num">${formatTimes(r.draws)}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`,
         )
         .join("")}</tbody></table></div></div>`,
     )}
@@ -1612,89 +1889,11 @@ async function renderShape(game: string, info: GameInfo) {
       ${shape.sum_bins
         .map(
           (b) =>
-            `<div class="bar-row${peakClass(b.draws, maxBin)}"><span>${b.label}</span><span class="bar-track"><span class="bar-fill" style="width:${(b.draws / maxBin) * 100}%"></span></span><span class="num">${b.draws}</span></div>`,
+            `<div class="bar-row${peakClass(b.draws, maxBin)}"><span>${b.label}</span><span class="bar-track"><span class="bar-fill" style="width:${(b.draws / maxBin) * 100}%"></span></span><span class="num">${formatTimes(b.draws)}</span></div>`,
         )
         .join("")}</div>`,
     )}
-    ${shapeBox(
-      "seq",
-      "連番",
-      "07・08のような隣り合う数字。10・11・12なら連番2組、いちばん長い連番は3。",
-      `<div class="inner pad0">
-        <h3 class="shape-sub">連番の組数</h3>
-        <div class="table-wrap"><table class="data"><thead><tr><th>形</th><th class="num">回数</th><th class="num">割合</th></tr></thead>
-        <tbody>${shape.consecutive_pairs
-          .map((r) => {
-            const label = r.adjacent_count === 0 ? "連番なし" : `連番${r.adjacent_count}組`;
-            return `<tr class="${peakClass(r.draws, pairPeak)}"><td>${label}</td><td class="num">${r.draws}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`;
-          })
-          .join("")}</tbody></table></div>
-        <h3 class="shape-sub">最長の連番</h3>
-        <div class="table-wrap"><table class="data"><thead><tr><th>形</th><th class="num">回数</th><th class="num">割合</th></tr></thead>
-        <tbody>${shape.consecutive_run
-          .map((r) => {
-            const label = r.run_length <= 1 ? "連番なし" : `最長が${r.run_length}`;
-            return `<tr class="${peakClass(r.draws, runPeak)}"><td>${label}</td><td class="num">${r.draws}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`;
-          })
-          .join("")}</tbody></table></div>
-      </div>`,
-    )}
-    ${shapeBox(
-      "digit",
-      "一の位",
-      "一の位だけ見た回数。01も11も「1」。",
-      `<div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th class="num">一の位</th><th class="num">回数</th><th class="num">期待回数</th></tr></thead>
-      <tbody>${shape.last_digit
-        .map(
-          (r) =>
-            `<tr class="${peakClass(r.count, digitPeak)}"><td class="num">${r.digit}</td><td class="num">${r.count}</td><td class="num">${roundInt(r.expected)}</td></tr>`,
-        )
-        .join("")}</tbody></table></div></div>`,
-    )}
-    ${shapeBox(
-      "span",
-      "最小と最大の差",
-      `いちばん大きい数字と小さい数字の差。01と${pad2(info.max_number)}なら${info.max_number - 1}。`,
-      `<div class="inner"><p class="shape-kpi">平均 ${round1(shape.span.summary.mean)}　最小 ${shape.span.summary.min}　最大 ${shape.span.summary.max}</p>
-      <div class="table-wrap"><table class="data"><thead><tr><th class="num">差</th><th class="num">回数</th></tr></thead>
-      <tbody>${shape.span.items
-        .map(
-          (r) =>
-            `<tr class="${peakClass(r.draws, spanPeak)}"><td class="num">${r.span}</td><td class="num">${r.draws}</td></tr>`,
-        )
-        .join("")}</tbody></table></div></div>`,
-    )}
-    ${shapeBox(
-      "band",
-      "数字の帯",
-      `番号の帯ごとの個数。${info.label}は${bandRange}。`,
-      `<div class="inner">
-        <p class="shape-kpi">1回あたり　低 ${round1(shape.band_mix["低"] || 0)}個　中 ${round1(shape.band_mix["中"] || 0)}個　高 ${round1(shape.band_mix["高"] || 0)}個</p>
-        <h3 class="shape-sub">低・中・高</h3>
-        <div class="table-wrap"><table class="data"><thead><tr><th>帯</th><th class="num">範囲</th><th class="num">延べ個数</th></tr></thead>
-        <tbody>${bands3
-          .map(
-            (b) =>
-              `<tr class="${peakClass(b.count, band3Peak)}"><td>${b.label}</td><td class="num">${b.min}〜${b.max}</td><td class="num">${b.count}</td></tr>`,
-          )
-          .join("")}</tbody></table></div>
-        <h3 class="shape-sub">6分割</h3>
-        <div class="table-wrap"><table class="data"><thead><tr><th>範囲</th><th class="num">延べ個数</th></tr></thead>
-        <tbody>${bands6
-          .map(
-            (b) =>
-              `<tr class="${peakClass(b.count, band6Peak)}"><td>${b.min}〜${b.max}</td><td class="num">${b.count}</td></tr>`,
-          )
-          .join("")}</tbody></table></div>
-      </div>`,
-    )}
-    ${shapeBox(
-      "weekday",
-      "抽せん曜日",
-      "抽せんがあった曜日の回数。",
-      `<div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th>曜日</th><th class="num">回数</th></tr></thead>
-      <tbody>${shape.weekday.map((r) => `<tr><td>${week[r.weekday]}曜日</td><td class="num">${r.draws}</td></tr>`).join("")}</tbody></table></div></div>`,
-    )}`,
+    ${relatedFor("shape", game, info.label)}`,
     game,
     "shape",
   );
@@ -1755,7 +1954,8 @@ async function renderGrid(game: string, info: GameInfo) {
         <button type="button" class="chip-btn${consec ? " on" : ""}" data-hl="consec">連番</button>
         <button type="button" class="chip-btn${streak ? " on" : ""}" data-hl="streak">連続出現</button>
       </div>
-      <div class="table-wrap"><table class="data grid-table"><thead><tr><th>回</th><th>日</th>${header}</tr></thead><tbody>${body}</tbody></table></div></div>`,
+      <div class="table-wrap"><table class="data grid-table"><thead><tr><th>回</th><th>日</th>${header}</tr></thead><tbody>${body}</tbody></table></div></div>
+      ${relatedFor("grid", game, info.label)}`,
       game,
       "grid",
     );
@@ -1802,7 +2002,7 @@ async function renderFollow(game: string, info: GameInfo) {
     <tbody>${follow.summary
       .map(
         (r) =>
-          `<tr><td>${summaryLabel[r.key] || r.key}</td><td class="num">${r.draws.toLocaleString("ja-JP")}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`,
+          `<tr><td>${summaryLabel[r.key] || r.key}</td><td class="num">${formatTimes(r.draws)}</td><td class="num">${(r.rate * 100).toFixed(1)}%</td></tr>`,
       )
       .join("")}</tbody></table></div></div></div>
     <div class="box"><h2>数字ごと</h2>
@@ -1813,7 +2013,7 @@ async function renderFollow(game: string, info: GameInfo) {
     <tbody>${follow.by_number
       .map(
         (r) =>
-          `<tr><td>${numLink(game, r.number)}</td><td class="num">${r.without_prev}</td><td class="num">${r.with_prev}</td><td class="num">${(r.with_prev_rate * 100).toFixed(1)}%</td><td class="num">${r.streak2}</td><td class="num">${r.streak3}</td></tr>`,
+          `<tr><td>${numLink(game, r.number)}</td><td class="num">${formatTimes(r.without_prev)}</td><td class="num">${formatTimes(r.with_prev)}</td><td class="num">${(r.with_prev_rate * 100).toFixed(1)}%</td><td class="num">${formatTimes(r.streak2)}</td><td class="num">${formatTimes(r.streak3)}</td></tr>`,
       )
       .join("")}</tbody></table></div></div></div>
     <div class="box"><h2>多い・少ない</h2>
@@ -1823,7 +2023,8 @@ async function renderFollow(game: string, info: GameInfo) {
       ${hlLine("2連続が多い", hl.streak2_high, (v) => `${v}回`)}
       ${hlLine("前回にも出る率が高い", hl.rate_high, (v) => `${(v * 100).toFixed(1)}%`)}
       ${hlLine("前回にも出る率が低い", hl.rate_low, (v) => `${(v * 100).toFixed(1)}%`)}
-    </tbody></table></div></div></div>`,
+    </tbody></table></div></div></div>
+    ${relatedFor("follow", game, info.label)}`,
     game,
     "follow",
   );
@@ -1853,18 +2054,14 @@ async function renderNumber(game: string, info: GameInfo, n?: number) {
       ${periodBar(game, "number", period, drawCount, n)}
       ${rangeLine(data.meta)}
       <ul class="flash-meta">
-        <li>本数字 ${f.count}</li>
-        <li>ボーナス ${f.bonus_count ?? 0}</li>
-        <li>本＋ボーナス ${f.main_plus_bonus ?? 0}</li>
-        <li>期待回数 ${roundInt(f.expected_main || 0)}</li>
-        <li>最終 ${formatDate(f.last_draw_date)}</li>
-        <li>経過 ${sinceLabel(f.draws_since_last)}</li>
-        <li>最長空白 ${f.max_rest ?? "—"}</li>
-        <li>最長連続 ${f.max_streak ?? "—"}</li>
+        <li>本数字 ${formatTimes(f.count)}</li>
+        <li>ボーナス ${formatTimes(f.bonus_count ?? 0)}</li>
+        <li>最後の本数字 ${formatDate(f.last_draw_date)}</li>
+        <li>今の空き ${sinceLabel(f.draws_since_last)}</li>
       </ul>
     </div>
     <div class="box"><h2>一緒に出た数字</h2><div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th>数字</th><th class="num">回数</th></tr></thead>
-    <tbody>${data.mates.map((m) => `<tr><td>${numLink(game, m.number)}</td><td class="num">${m.count}</td></tr>`).join("")}</tbody></table></div></div></div>
+    <tbody>${data.mates.map((m) => `<tr><td>${numLink(game, m.number)}</td><td class="num">${formatTimes(m.count)}</td></tr>`).join("")}</tbody></table></div></div></div>
     <div class="box"><h2>出た開催</h2><div class="inner pad0"><div class="table-wrap"><table class="data"><thead><tr><th class="num">回</th><th>抽せん日</th><th>本数字／ボーナス</th></tr></thead>
     <tbody>${data.items.map((item) => drawRow(item, [n])).join("")}</tbody></table></div></div></div>`,
     game,
@@ -1900,11 +2097,10 @@ async function renderRanks(game: string, _info: GameInfo) {
       ${howto("1等から3等まで、金額の高い回と低い回。同額はまとめています。")}
       ${periodBar(game, "ranks", key, 0)}
       ${rangeLine(data.meta)}
-      <p class="howto"><a href="/${game}/freq" data-link>出現回数</a>　<a href="/${game}/history" data-link>結果一覧</a></p>
       ${asOf}
     </div>
     ${rankBoxes}
-    <p class="flash-actions"><a class="btn btn-ghost" href="/${game}/freq" data-link>出現回数</a></p>
+    ${relatedFor("ranks", game, _info.label)}
   `,
     game,
     "ranks",
@@ -2010,6 +2206,7 @@ async function renderGenerate(game: string, info: GameInfo) {
         <p>口数を指定して、その場で組み合わせを作ります。「出現の多い数字」か「均等」を選べます。期間も選べます。口どうしで同じ並びはできるだけ避けます。</p>
       </div>
     </div>
+    ${relatedFor("generate", game, info.label)}
   `,
     game,
     "generate",
@@ -2082,9 +2279,19 @@ function bindLinks() {
     });
   });
   void hydrateAffiliate();
+  if (!scrollToTopOnPaint) return;
+  scrollToTopOnPaint = false;
+  scrollPageTop();
+  requestAnimationFrame(() => {
+    scrollPageTop();
+    requestAnimationFrame(scrollPageTop);
+  });
 }
 
-window.addEventListener("popstate", () => void render());
+window.addEventListener("popstate", () => {
+  scrollToTopOnPaint = true;
+  void render();
+});
 void render().catch((err) => {
   root.innerHTML = `<p class="error">${err.message}</p><p class="muted">${gameLabel("loto6")}</p>`;
 });
