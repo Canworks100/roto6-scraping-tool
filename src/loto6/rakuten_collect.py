@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 from urllib.parse import urljoin
 
@@ -17,6 +18,7 @@ from loto6.parser import parse_rakuten_lastresults, parse_rakuten_month_html
 from loto6.storage import Store
 
 logger = logging.getLogger("loto6")
+JST = ZoneInfo("Asia/Tokyo")
 
 SLUG = {"loto6": "loto6", "loto7": "loto7", "miniloto": "mini"}
 
@@ -227,6 +229,25 @@ def check_draw_night_numbers(config: dict[str, Any], game: str) -> bool:
         store.close()
 
 
+def _log_lastresults_seen(game: str, draws: list) -> None:
+    """抽せん夜の実行ログに、最新回が当日分として載っていたかを残す。"""
+    now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+    today = datetime.now(JST).date().isoformat()
+    if not draws:
+        logger.info("[%s] lastresults 確認 %s 件数=0 当日掲載=no", game, now)
+        return
+    newest = max(draws, key=lambda d: d.draw_no)
+    draw_date = str(newest.draw_date or "")[:10]
+    logger.info(
+        "[%s] lastresults 確認 %s 最新 第%s回 抽せん日=%s 当日掲載=%s",
+        game,
+        now,
+        newest.draw_no,
+        draw_date or "不明",
+        "yes" if draw_date == today else "no",
+    )
+
+
 def _ingest_lastresults(
     config: dict[str, Any],
     game: str,
@@ -259,6 +280,7 @@ def _ingest_lastresults(
         min_number=int(game_def["min_number"]),
         max_number=int(game_def["max_number"]),
     )
+    _log_lastresults_seen(game, draws)
     inserted = skipped = changed = 0
     saved_nos: list[int] = []
     existing_max = max(store.existing_draw_nos(game), default=0)
