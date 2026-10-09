@@ -97,6 +97,7 @@ export VITE_SITE_ORIGIN=https://lottery-analytics.com
    - 速報＋静的再公開（抽せん曜日・夜複数回）:
      `loto-collect-latest-loto6.timer`（月木）/ `loto-collect-latest-loto7.timer`（金）/ `loto-collect-latest-miniloto.timer`（火）
      → `collect-and-publish.sh`（`flock` 排他、変更時だけ `SITE_ORIGIN` 付きビルド → `/var/www/loto-stg/`）
+   - 中継の読み取り（抽せん曜日 18:40、19:05まで）: `loto-live-read-loto6.timer`（月木）/ `loto-live-read-loto7.timer`（金）/ `loto-live-read-miniloto.timer`（火）。反映後に `sudo -u loto /opt/loto/.venv/bin/playwright install chromium` してからタイマーを有効にする
    - 23:00 番号未取得チェック: `loto-draw-miss-loto6|loto7|miniloto.timer`
    - 失敗通知: `/etc/vps-backup/discord.env` の `DISCORD_WEBHOOK_URL`（#vps-監視）。互換で `/etc/loto/alert.env` の `LOTO_ALERT_WEBHOOK` も可。値はリポジトリに書かない
    - みずほ夜間 `loto-collect@*.timer` は `disable --now`（または mask）。service は no-op

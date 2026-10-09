@@ -118,6 +118,7 @@ class FlashArticleTest(unittest.TestCase):
         self.assertNotIn("1等なし", article["lead"])
         self.assertIn("02・05・11・18・27・33", article["title"])
         self.assertIn("本数字は", article["lead"])
+        self.assertIn("速報（当せん金額は確定後に追記）", article["lead"])
         self.assertEqual(article["carry_text"], "")
         official = _draw(4, "2026-01-15", [2, 5, 11, 18, 27, 33], 9, prize1=(1, 300_000_000))
         self.assertTrue(self.store.save(official, refresh=True, stage="official"))

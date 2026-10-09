@@ -415,8 +415,10 @@ for game in ("loto6", "loto7", "miniloto"):
     nums = [int(latest[f"n{i}"]) for i in range(1, main + 1)]
     last_no = int(latest["draw_no"])
     bonus2_col = ", bonus2" if game == "loto7" else ""
+    has_stage = any(row[1] == "result_stage" for row in c.execute("PRAGMA table_info(draws)"))
+    stage_col = ", result_stage" if has_stage else ""
     hist = c.execute(
-        f"SELECT draw_no, draw_date, {cols}, bonus{bonus2_col} FROM draws WHERE game=? ORDER BY draw_no DESC LIMIT 50",
+        f"SELECT draw_no, draw_date, {cols}, bonus{bonus2_col}{stage_col} FROM draws WHERE game=? ORDER BY draw_no DESC LIMIT 50",
         (game,),
     ).fetchall()
     hist_rows = []
@@ -429,6 +431,8 @@ for game in ("loto6", "loto7", "miniloto"):
         }
         if game == "loto7":
             row["bonus2"] = int(r["bonus2"]) if r["bonus2"] is not None else None
+        if has_stage:
+            row["result_stage"] = r["result_stage"] or "official"
         hist_rows.append(row)
     flashes = c.execute(
         "SELECT draw_no, draw_date FROM draws WHERE game=? ORDER BY draw_no",
@@ -701,6 +705,9 @@ for (const game of GAMES) {
     body += `<h1>${esc(headline)}</h1><p>${dateJa}</p>`;
     let jsonLd = null;
     if (histHit) {
+      if (histHit.result_stage && histHit.result_stage !== "official") {
+        body += `<p>速報（当せん金額は確定後に追記）</p>`;
+      }
       body += `<p>本数字 ${ballsText(histHit.numbers, histHit.bonus)}</p>`;
       jsonLd = {
         "@context": "https://schema.org",

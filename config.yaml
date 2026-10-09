@@ -119,6 +119,14 @@ analysis:
   top_pairs: 30
   top_triples: 20
 
+# 中継の自動公開。過去録画で各種目3回がすべて一致したので true。
+live_read:
+  publish: true
+  confirmations: 3
+  interval_sec: 5
+  window_start: "18:40"
+  window_end: "19:05"
+
 public:
   cors_origins: []
   search_rate_per_minute: 60

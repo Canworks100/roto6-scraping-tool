@@ -238,6 +238,7 @@ def _lead(
     parts = [f"{label}{format_draw(draw_no)}は{format_date(draw_date)}の抽せん。"]
     numbers_text = "・".join(f"{n:02d}" for n in numbers)
     if stage != "official":
+        parts.append("速報（当せん金額は確定後に追記）。")
         parts.append(f"本数字は{numbers_text}。")
         if bonus2 is None:
             parts.append(f"ボーナスは{bonus:02d}。")
