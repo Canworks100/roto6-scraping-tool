@@ -908,7 +908,7 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
           : ""
       }
       <ul class="flash-meta">
-        <li>販売実績 ${formatYen(item.sales_amount)}</li>
+        ${item.sales_amount == null ? "" : `<li>販売実績 ${formatYen(item.sales_amount)}</li>`}
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
       </ul>
       <p class="flash-actions">
@@ -1054,7 +1054,7 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
       }
       ${article.carry_text ? `<p class="post-carry">${esc(article.carry_text)}</p>` : ""}
       <ul class="flash-meta">
-        <li>販売実績 ${formatYen(item.sales_amount)}</li>
+        ${item.sales_amount == null ? "" : `<li>販売実績 ${formatYen(item.sales_amount)}</li>`}
         <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
       </ul>
       ${notes ? `<h3 class="post-h">この回の特徴</h3><ul class="post-notes">${notes}</ul>` : ""}
@@ -2263,6 +2263,7 @@ function bindLinks() {
   restorePagesNav();
   document.querySelectorAll<HTMLAnchorElement>("a[data-link]").forEach((a) => {
     a.addEventListener("click", (ev) => {
+      if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
       ev.preventDefault();
       navigate(a.getAttribute("href") || "/");
     });

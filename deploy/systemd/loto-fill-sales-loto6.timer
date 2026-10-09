@@ -1,0 +1,13 @@
+[Unit]
+Description=Loto6 sales fill the morning after draw night (Tue/Fri)
+
+[Timer]
+Unit=loto-fill-sales@loto6.service
+# 月木の抽せんで 22:50 までに金額ページが無いとき、翌日の朝と昼に取り直す。
+OnCalendar=Tue,Fri *-*-* 08:00:00
+OnCalendar=Tue,Fri *-*-* 12:00:00
+Persistent=true
+RandomizedDelaySec=90
+
+[Install]
+WantedBy=timers.target

@@ -58,7 +58,8 @@ fi
 echo "==> アプリ同期"
 rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
   --exclude '.venv' --exclude 'node_modules' --exclude 'apps/web/node_modules' \
-  --exclude 'apps/web/dist' --exclude 'Backup' --exclude '.git' \
+  --exclude 'apps/web/dist' --exclude 'apps/web/.env.local' --exclude 'Backup' --exclude '.git' \
+  --exclude '.cache' --exclude '.local' --exclude '.npm' \
   --exclude 'data/*.sqlite' --exclude 'data/*.sqlite-*' --exclude 'data/*.sqlite.bak-*' \
   "${ROOT}/" "${HOST}:${REMOTE_APP}/"
 if [[ "${DRY_RUN}" -eq 0 ]]; then

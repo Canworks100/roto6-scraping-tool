@@ -1,0 +1,13 @@
+[Unit]
+Description=Miniloto sales fill the morning after draw night (Wed)
+
+[Timer]
+Unit=loto-fill-sales@miniloto.service
+# 火曜の抽せんで 22:50 までに金額ページが無いとき、翌日の朝と昼に取り直す。
+OnCalendar=Wed *-*-* 08:00:00
+OnCalendar=Wed *-*-* 12:00:00
+Persistent=true
+RandomizedDelaySec=90
+
+[Install]
+WantedBy=timers.target

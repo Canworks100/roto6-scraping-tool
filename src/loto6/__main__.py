@@ -54,6 +54,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="補完で変更があったとき静的サイトを再ビルドする",
     )
+    sales_parser = sub.add_parser("fill-sales", help="販売実績が空の直近回だけ埋める")
+    sales_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
+    sales_parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="販売実績を書けたとき静的サイトを再ビルドする",
+    )
 
     sub.add_parser("publish-static", help="静的サイトをビルドして LOTO_WWW_DIR へ同期する")
 
@@ -191,6 +198,35 @@ def main(argv: list[str] | None = None) -> int:
                 alert(f"LOTO静的ビルド失敗（補完後）: {exc}")
                 raise
         return exit_code
+    if args.command == "fill-sales":
+        from loto6.games import game_ids, get_game
+        from loto6.sales_fill import fill_missing_sales
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        total_filled = 0
+        for game in targets:
+            store = Store(Path(config["_sqlite_path"]))
+            try:
+                result = fill_missing_sales(config, game, store)
+                draw_nos = [int(draw_no) for draw_no in result["draw_nos"]]
+                if draw_nos:
+                    from loto6.flash_article import refresh_articles
+
+                    refresh_articles(store, get_game(config, game), draw_nos)
+            finally:
+                store.close()
+            print(f"{game}: filled={result['filled']} failed={result['failed']} checked={result['checked']}")
+            total_filled += int(result["filled"])
+        if args.publish and total_filled > 0:
+            from loto6.notify import alert
+            from loto6.publish import publish_from_config
+
+            try:
+                publish_from_config(config)
+            except Exception as exc:  # noqa: BLE001
+                alert(f"LOTO静的ビルド失敗（販売実績の補完後）: {exc}")
+                raise
+        return 0
     if args.command == "publish-static":
         from loto6.notify import alert
         from loto6.publish import publish_from_config

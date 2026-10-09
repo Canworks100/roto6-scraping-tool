@@ -70,7 +70,7 @@ def _client(config: dict[str, Any], path: str) -> HttpClient:
 
 
 def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback: int = 4) -> dict[str, int]:
-    """直近番号（lastresults）＋当月の月次ページで金額を足す。販売実績は null。"""
+    """直近番号（lastresults）＋当月の月次ページで金額を足す。販売実績は結果ページから補う。"""
     game_def = get_game(config, game)
     store = Store(Path(config["_sqlite_path"]))
     inserted = skipped = absent = failed = 0
@@ -98,11 +98,28 @@ def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback
                 failed += 1
                 logger.error("[%s] 月次 %s 解析失敗: %s", game, yyyymm, exc)
 
-        if saved_nos:
+        sales_nos: list[int] = []
+        try:
+            from loto6.sales_fill import fill_missing_sales
+
+            sales = fill_missing_sales(config, game, store)
+            sales_nos = [int(draw_no) for draw_no in sales["draw_nos"]]
+            logger.info(
+                "[%s] 販売実績 埋めた%s / 失敗%s / 対象%s",
+                game,
+                sales["filled"],
+                sales["failed"],
+                sales["checked"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("[%s] 販売実績の補完に失敗: %s", game, exc)
+        refresh_nos = sorted(set(saved_nos) | set(sales_nos))
+        if refresh_nos:
             from loto6.flash_article import refresh_articles
 
-            n = refresh_articles(store, game_def, sorted(set(saved_nos)))
+            n = refresh_articles(store, game_def, refresh_nos)
             logger.info("[%s] 速報記事 %s件を自動生成", game, n)
+        changed += len(sales_nos)
         store.export_csv(Path(config["_csv_path"]), game=game)
     finally:
         store.close()

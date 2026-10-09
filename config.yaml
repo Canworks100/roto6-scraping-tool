@@ -24,7 +24,7 @@ rate_limit:
   backoff_sec: 5.0
   max_consecutive_failures: 20
 
-# 楽天×宝くじ（番号・金額の主入手先）。販売実績は取得不可 → null
+# 楽天×宝くじ（番号・金額の主入手先）。販売実績は別ページから、番号一致のときだけ補う。
 primary:
   base_url: "https://takarakuji.rakuten.co.jp"
   lastresults:
