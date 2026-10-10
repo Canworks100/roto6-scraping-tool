@@ -1721,6 +1721,9 @@ async function renderSimu(seq: number) {
           <p class="play-cost">購入 ${res.ticket_count.toLocaleString("ja-JP")}口　${formatYen(res.cost)}　／　差引 ${formatYen(res.net)}</p>
         </div>
         ${gradeChips ? `<div class="chips">${gradeChips}</div>` : `<p class="muted inner">当たりなし</p>`}
+        <div class="simu-again">
+          <button type="button" class="btn btn-primary" id="do-simu-again">もう1回抽選する</button>
+        </div>
       </div>
       <div class="box">
         <h2>明細</h2>
@@ -1730,6 +1733,9 @@ async function renderSimu(seq: number) {
           <tbody>${detailRows || `<tr><td colspan="5" class="muted">表示する口はありません</td></tr>`}</tbody>
         </table></div></div>
       </div>`;
+      document.querySelector("#do-simu-again")?.addEventListener("click", () => {
+        void runDraw();
+      });
     } catch (err) {
       stage.hidden = true;
       stage.innerHTML = "";

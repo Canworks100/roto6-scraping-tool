@@ -2324,6 +2324,13 @@ table.data tbody tr.hot {
   margin: 0;
 }
 
+.simu-again {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 8px 16px 16px;
+}
+
 .simu-stage {
   margin-top: 12px;
 }
