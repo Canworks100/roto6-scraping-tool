@@ -15,7 +15,8 @@ Environment=LOTO_WWW_DIR=/var/www/loto-stg
 EnvironmentFile=-/etc/vps-backup/discord.env
 EnvironmentFile=-/etc/loto/alert.env
 ExecStart=/opt/loto/scripts/live-read.sh %i
-TimeoutStartSec=2000
+# 18:50 開始、中継の締め 19:15、録画の締め 20:00 + 読み取り。20:15 の楽天収集より前に終わる。
+TimeoutStartSec=5400
 Nice=10
 NoNewPrivileges=true
 PrivateTmp=true
