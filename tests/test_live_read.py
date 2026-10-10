@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from loto6.live_board import TEMPLATES, BoardRead, read_result_board
-from loto6.live_watch import parse_backnumber, parse_live_watch, settle
+from loto6.live_watch import find_watch_link, page_links, parse_backnumber, parse_live_watch, settle
 from loto6.parser import Draw
 from loto6.rakuten_collect import _note_live_mismatch
 from loto6.storage import Store
@@ -89,6 +89,59 @@ class CatalogTests(unittest.TestCase):
         url, draw_no = parse_live_watch(live, "loto6")
         self.assertEqual(draw_no, 2145)
         self.assertTrue(url and url.endswith("xyz"))
+
+
+# 2026-10-09 の公式ライブページ（抜粋）。中継中と終了後でボタンのURLの形が違う。
+_LIVE_PAGE_ON_AIR = """
+<title>数字選択式宝くじ抽せん会 ライブ中継</title>
+<!--ライブ配信の場合-->
+<div class="btn-caption">ロト７第698回 ナンバーズ第7089回</div>
+<div class="btn btn-dreamst">
+  <a onClick="ga('send','pageview',{'page':'/ds/live','title':'ライブ配信'});" target="_blank"
+     href="https://takarakuji.webcdn.stream.ne.jp/www11/takarakuji/live/index.html">ライブ配信を視聴する</a>
+</div>
+<p><a href="https://www.takarakuji-official.jp/">宝くじ公式サイト</a></p>
+"""
+
+_LIVE_PAGE_RECORDED = """
+<!--録画配信の場合-->
+<div class="btn-caption">ロト７第698回 ナンバーズ第7089回</div>
+<div class="btn btn-dreamst">
+  <a onClick="ga('send','pageview',{'page':'/ds/rokuga','title':'録画配信'});" target="_blank"
+     href="https://api01-platform.stream.co.jp/apiservice/plt3/MzQ0%23MTAyMTg%3d%23360">録画動画を再生する</a>
+</div>
+"""
+
+
+class WatchLinkTests(unittest.TestCase):
+    def test_live_button_with_any_url(self) -> None:
+        link = find_watch_link(_LIVE_PAGE_ON_AIR, "loto7")
+        self.assertEqual(link.draw_no, 698)
+        self.assertEqual(link.url, "https://takarakuji.webcdn.stream.ne.jp/www11/takarakuji/live/index.html")
+        self.assertFalse(link.recorded)
+
+    def test_recorded_button(self) -> None:
+        link = find_watch_link(_LIVE_PAGE_RECORDED, "loto7")
+        self.assertEqual(link.draw_no, 698)
+        self.assertTrue(link.url and link.url.startswith("https://api01-platform.stream.co.jp/"))
+        self.assertTrue(link.recorded)
+
+    def test_unknown_domain_still_found(self) -> None:
+        html = _LIVE_PAGE_ON_AIR.replace("takarakuji.webcdn.stream.ne.jp", "player.example.net")
+        link = find_watch_link(html, "loto7")
+        self.assertEqual(link.url, "https://player.example.net/www11/takarakuji/live/index.html")
+
+    def test_other_game_or_no_button(self) -> None:
+        self.assertIsNone(find_watch_link(_LIVE_PAGE_ON_AIR, "loto6").draw_no)
+        no_button = '<div class="btn-caption">ロト７第698回</div><a href="https://www.takarakuji-official.jp/">公式</a>'
+        link = find_watch_link(no_button, "loto7")
+        self.assertEqual(link.draw_no, 698)
+        self.assertIsNone(link.url)
+
+    def test_page_links_for_alert(self) -> None:
+        links = page_links(_LIVE_PAGE_ON_AIR)
+        self.assertEqual(len(links), 1)
+        self.assertIn("ライブ配信を視聴する", links[0])
 
 
 class SettleTests(unittest.TestCase):
