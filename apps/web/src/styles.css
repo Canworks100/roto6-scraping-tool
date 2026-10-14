@@ -2406,6 +2406,11 @@ body:has(.simu-dialog[open]) {
   align-items: center;
 }
 
+.simu-draw-balls .balls-bonus {
+  width: 100%;
+  justify-content: center;
+}
+
 .simu-draw-balls .balls-main {
   width: 100%;
   flex-wrap: nowrap;
