@@ -2326,6 +2326,28 @@ table.data tbody tr.hot {
   padding: 8px 16px 16px;
 }
 
+.simu-share {
+  padding: 0 16px 20px;
+  text-align: center;
+}
+
+.simu-share-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted, #666);
+}
+
+.simu-share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.simu-share-buttons .btn {
+  text-decoration: none;
+}
+
 .simu-dialog {
   width: min(960px, calc(100% - 24px));
   max-height: calc(100dvh - 32px);

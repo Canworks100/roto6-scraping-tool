@@ -1705,6 +1705,19 @@ async function renderSimu(seq: number) {
             `<span class="chip">${g.grade}等 ${g.count.toLocaleString("ja-JP")}口　各${formatYen(g.amount_each)}</span>`,
         )
         .join("");
+      const shareUrl = `${absoluteUrl("/simu")}?game=${encodeURIComponent(info.id)}`;
+      const shareGrades = res.by_grade.length
+        ? res.by_grade.map((g) => `${g.grade}等×${g.count.toLocaleString("ja-JP")}`).join("・")
+        : "当たりなし";
+      const shareText = [
+        `${simuTitle(info.id)}で${res.ticket_count.toLocaleString("ja-JP")}口（${formatYen(res.cost)}）買ってみた結果（${round}回目）`,
+        `当せん番号 ${res.draw.numbers.map(pad2).join(" ")}${res.draw.bonuses.length ? `（${res.draw.bonuses.map(pad2).join(" ")}）` : ""}`,
+        `${shareGrades}／当せん額 ${formatYen(res.prize_total)}／差引 ${formatYen(res.net)}`,
+        `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター`,
+      ].join("\n");
+      const shareXUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+      const shareLineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+      const canNativeShare = typeof navigator.share === "function";
       stage.innerHTML = `<div class="box simu-draw-box">
         <h2>抽せん結果（${round}回目）</h2>
         <div class="inner simu-draw-body">
@@ -1724,7 +1737,30 @@ async function renderSimu(seq: number) {
         <div class="simu-again">
           <button type="button" class="btn btn-primary" id="do-simu-again">もう1回抽選する</button>
         </div>
+        <div class="simu-share">
+          <p class="simu-share-title">結果をシェア</p>
+          <div class="simu-share-buttons">
+            <a class="btn" id="share-x" href="${esc(shareXUrl)}" target="_blank" rel="noopener">Xでポスト</a>
+            <a class="btn" id="share-line" href="${esc(shareLineUrl)}" target="_blank" rel="noopener">LINEで送る</a>
+            ${canNativeShare ? `<button type="button" class="btn" id="share-native">その他で共有</button>` : ""}
+            <button type="button" class="btn" id="share-copy">テキストをコピー</button>
+          </div>
+        </div>
       </div>`;
+      document.querySelector("#share-native")?.addEventListener("click", () => {
+        navigator.share({ text: shareText, url: shareUrl }).catch(() => {
+          /* キャンセル時は何もしない */
+        });
+      });
+      document.querySelector("#share-copy")?.addEventListener("click", async () => {
+        const btn = document.querySelector("#share-copy") as HTMLButtonElement;
+        try {
+          await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+          btn.textContent = "コピー済";
+        } catch {
+          btn.textContent = "コピーできませんでした";
+        }
+      });
       const detailNote = res.winners_only
         ? `<p class="muted">${res.detail_threshold}口を超えたため、当たり口だけ表示しています。</p>`
         : "";
