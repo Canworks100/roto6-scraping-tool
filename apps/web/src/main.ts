@@ -1713,9 +1713,11 @@ async function renderSimu(seq: number) {
         ? res.by_grade.map((g) => `${g.grade}等×${g.count.toLocaleString("ja-JP")}`).join("・")
         : "当たりなし";
       const shareText = [
+        `${res.prize_total > 0 ? "💰" : ""}【当せん額 ${formatYen(res.prize_total)}】`,
+        `${shareGrades}／差引 ${res.net > 0 ? "+" : ""}${formatYen(res.net)}`,
+        "",
         `${simuTitle(info.id)}で${res.ticket_count.toLocaleString("ja-JP")}口（${formatYen(res.cost)}）買ってみた結果（${round}回目）`,
         `当せん番号 ${res.draw.numbers.map(pad2).join(" ")}${res.draw.bonuses.length ? `（${res.draw.bonuses.map(pad2).join(" ")}）` : ""}`,
-        `${shareGrades}／当せん額 ${formatYen(res.prize_total)}／差引 ${formatYen(res.net)}`,
         `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター`,
       ].join("\n");
       const shareXUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
