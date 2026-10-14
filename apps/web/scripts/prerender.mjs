@@ -245,7 +245,7 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     out = out.replace("</title>", `</title>\n    <link rel="canonical" href="${canon}" />`);
   }
   const ogType = article?.ogType || "website";
-  const imageAbs = "https://lottery-analytics.com/og-image.png";
+  const imageAbs = "https://lottery-analytics.com/og-image.png?v=2";
   const imageAlt = "LOTO アナリティクス";
   const pub = article?.publishedTime || "";
   // index.html 既定の og/twitter 画像系を外し、ページ単位で入れ直す（重複防止）

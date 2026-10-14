@@ -388,7 +388,7 @@ export function setSeo(path: string, opts?: SeoOpts) {
   canonical.setAttribute("href", abs);
 
   const ogType = opts?.ogType || "website";
-  const imageAbs = "https://lottery-analytics.com/og-image.png";
+  const imageAbs = "https://lottery-analytics.com/og-image.png?v=2";
   const imageAlt = "LOTO アナリティクス";
   ensureMeta("property", "og:title").setAttribute("content", title);
   ensureMeta("property", "og:description").setAttribute("content", description);
