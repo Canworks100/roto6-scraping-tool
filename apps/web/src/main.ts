@@ -1396,6 +1396,12 @@ function toHalfWidthDigits(raw: string): string {
     .replace(/[^\d]/g, "");
 }
 
+function isSmartphone(): boolean {
+  if (/iPhone|iPod|Android/i.test(navigator.userAgent)) return true;
+  // iPadOS は Mac と同じ UA を返すため、タッチ対応で見分ける
+  return /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+}
+
 const COPY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>`;
 const CHECK_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
 
@@ -1720,8 +1726,15 @@ async function renderSimu(seq: number) {
         `当せん番号 ${res.draw.numbers.map(pad2).join(" ")}${res.draw.bonuses.length ? `（${res.draw.bonuses.map(pad2).join(" ")}）` : ""}`,
         `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター`,
       ].join("\n");
-      const shareXUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-      const shareLineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+      const shareXWebUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+      // スマホは Web 共有だとアプリ内ブラウザでログインを求められるため、アプリを直接開く
+      const isSp = isSmartphone();
+      const shareTextWithUrl = encodeURIComponent(`${shareText}\n${shareUrl}`);
+      const shareXUrl = isSp ? `twitter://post?message=${shareTextWithUrl}` : shareXWebUrl;
+      const shareLineUrl = isSp
+        ? `https://line.me/R/share?text=${shareTextWithUrl}`
+        : `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+      const shareTarget = isSp ? "" : ` target="_blank" rel="noopener"`;
       const canNativeShare = typeof navigator.share === "function";
       stage.innerHTML = `<div class="box simu-draw-box">
         <h2>抽せん結果（${round}回目）</h2>
@@ -1745,13 +1758,25 @@ async function renderSimu(seq: number) {
         <div class="simu-share">
           <p class="simu-share-title">結果をシェア</p>
           <div class="simu-share-buttons">
-            <a class="simu-share-icon simu-share-x" id="share-x" href="${esc(shareXUrl)}" target="_blank" rel="noopener" aria-label="Xでポスト" title="Xでポスト"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
-            <a class="simu-share-icon simu-share-line" id="share-line" href="${esc(shareLineUrl)}" target="_blank" rel="noopener" aria-label="LINEで送る" title="LINEで送る"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg></a>
+            <a class="simu-share-icon simu-share-x" id="share-x" href="${esc(shareXUrl)}"${shareTarget} aria-label="Xでポスト" title="Xでポスト"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+            <a class="simu-share-icon simu-share-line" id="share-line" href="${esc(shareLineUrl)}"${shareTarget} aria-label="LINEで送る" title="LINEで送る"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg></a>
             <button type="button" class="simu-share-icon simu-share-copy" id="share-copy" aria-label="テキストをコピー" title="テキストをコピー">${COPY_ICON}</button>
             ${canNativeShare ? `<button type="button" class="btn" id="share-native">その他で共有</button>` : ""}
           </div>
         </div>
       </div>`;
+      if (isSp) {
+        // X アプリが無いときは Web の投稿画面へ切り替える
+        document.querySelector("#share-x")?.addEventListener("click", () => {
+          const fallback = window.setTimeout(() => {
+            if (document.visibilityState === "visible") location.href = shareXWebUrl;
+          }, 1500);
+          const cancel = () => {
+            if (document.visibilityState === "hidden") window.clearTimeout(fallback);
+          };
+          document.addEventListener("visibilitychange", cancel, { once: true });
+        });
+      }
       document.querySelector("#share-native")?.addEventListener("click", () => {
         navigator.share({ text: shareText, url: shareUrl }).catch(() => {
           /* キャンセル時は何もしない */
