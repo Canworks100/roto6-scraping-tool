@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
             correct = sum(1 for row in rows if row["ok"])
             print(f"{game} {correct}/{len(rows)}")
             for row in rows:
-                print(f"  第{row['draw_no']}回 {'一致' if row['ok'] else '不一致'} read={row['read']} expected={row['expected']}")
+                print(f"  第{row['draw_no']}回 {'一致' if row['ok'] else '不一致'} 金額{'確定' if row['prizes_ok'] else '未確定'} read={row['read']} expected={row['expected']}")
             if correct != len(rows) or not rows:
                 failed = True
         return 1 if failed else 0

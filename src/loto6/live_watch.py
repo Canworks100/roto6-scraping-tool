@@ -165,6 +165,21 @@ def settle(readings: list[BoardRead], need: int, *, require_prizes: bool = False
     return None
 
 
+def describe_sampling(readings: list[BoardRead], diag: dict[str, Any], need: int) -> str:
+    """失敗通知用。再生できたか、何枚撮って、番号・金額をどこまで読めたか。"""
+    priced = [item for item in readings if item.amounts is not None]
+    parts = [
+        f"状態={diag.get('status', '不明')}",
+        f"撮影={diag.get('shots', 0)}",
+        f"結果表={len(readings)}",
+        f"金額あり={len(priced)}",
+        f"番号のみ確定={'可' if readings and settle(readings, need) is not None else '不可'}",
+    ]
+    if diag.get("video"):
+        parts.append(f"動画={diag['video']}")
+    return " ".join(parts)
+
+
 def _settings(config: dict[str, Any]) -> dict[str, Any]:
     live = config.get("live_read") or {}
     start = str(live.get("window_start") or "18:50")
@@ -212,12 +227,14 @@ def run_live(config: dict[str, Any], game: str) -> int:
     settled: BoardRead | None = None
     draw_no: int | None = None
     watch_url: str | None = None
+    notes: list[str] = []
 
     # 1) 中継（ライブのボタン）。録画のボタンが先に出ていたら 2) へ進む。
     link, seen = _wait_for_draw(config, game, end)
     if link is not None and not link.recorded:
         draw_no, watch_url = link.draw_no, link.url
         logger.info("[%s] 中継を読みます 第%s回 %s", game, draw_no, watch_url)
+        diag: dict[str, Any] = {}
         readings = _sample_player(
             watch_url,
             game_def,
@@ -226,8 +243,10 @@ def run_live(config: dict[str, Any], game: str) -> int:
             seek_tail_sec=None,
             need=need,
             require_prizes=True,
+            diag=diag,
         )
         settled = settle(readings, need, require_prizes=True)
+        notes.append("中継: " + describe_sampling(readings, diag, need))
         if settled is None:
             logger.info("[%s] 中継では確定できず 読み取り%s件 録画を待ちます", game, len(readings))
 
@@ -237,21 +256,27 @@ def run_live(config: dict[str, Any], game: str) -> int:
         if link is not None:
             draw_no, watch_url = link.draw_no, link.url
             logger.info("[%s] 録画を読みます 第%s回 %s", game, draw_no, watch_url)
+            diag = {}
             readings = _sample_player(
                 watch_url,
                 game_def,
                 until=None,
                 interval_sec=2,
                 seek_tail_sec=60,
+                diag=diag,
             )
             settled = settle(readings, need, require_prizes=True)
+            notes.append("録画: " + describe_sampling(readings, diag, need))
+        else:
+            notes.append("録画: ボタンが出ませんでした")
 
     if settled is None or settled.amounts is None or draw_no is None or watch_url is None:
         where = f"第{draw_no}回" if draw_no is not None else "当回不明"
         found = " / ".join(seen) if seen else "なし"
+        detail = " / ".join(notes) if notes else "読み取りなし"
         alert(
             f"{settings['recording_end']}までに中継・録画とも結果表を確定できませんでした game={game} {where}"
-            f" ページの視聴ボタン: {found}"
+            f" 読み取り: {detail} ページの視聴ボタン: {found}"
         )
         return 0
     logger.info(
@@ -384,6 +409,7 @@ def score_game(config: dict[str, Any], game: str, limit: int = 3) -> list[dict[s
             seek_tail_sec=45,
         )
         settled = settle(readings, need)
+        priced = settle(readings, need, require_prizes=True)
         truth = expected.get(int(item["draw_no"]))
         ok = settled is not None and truth is not None and _same_reading(settled, truth)
         results.append(
@@ -394,6 +420,7 @@ def score_game(config: dict[str, Any], game: str, limit: int = 3) -> list[dict[s
                 "read": None if settled is None else {"numbers": list(settled.numbers), "bonuses": list(settled.bonuses)},
                 "expected": None if truth is None else {"numbers": list(truth.numbers), "bonus": truth.bonus, "bonus2": truth.bonus2},
                 "frames": len(readings),
+                "prizes_ok": priced is not None,
             }
         )
         logger.info("[%s] 録画照合 第%s回 %s", game, item["draw_no"], "一致" if ok else "不一致")
@@ -450,6 +477,7 @@ def _sample_player(
     seek_tail_sec: int | None,
     need: int | None = None,
     require_prizes: bool = False,
+    diag: dict[str, Any] | None = None,
 ) -> list[BoardRead]:
     from playwright.sync_api import sync_playwright
 
@@ -459,6 +487,10 @@ def _sample_player(
     max_number = int(game_def["max_number"])
     prize_grades = int(game_def["prize_grades"])
     readings: list[BoardRead] = []
+    if diag is None:
+        diag = {}
+    diag.setdefault("shots", 0)
+    diag["status"] = "起動前"
     with sync_playwright() as playwright:
         browser = _launch(playwright)
         try:
@@ -470,7 +502,9 @@ def _sample_player(
                 video = _find_video(page)
             if video is None:
                 logger.info("再生できませんでした")
+                diag["status"] = "video要素なし"
                 return []
+            diag["status"] = "video要素あり"
             if seek_tail_sec is not None:
                 readings.extend(
                     _sample_recording(
@@ -483,11 +517,15 @@ def _sample_player(
                         min_number=min_number,
                         max_number=max_number,
                         prize_grades=prize_grades,
+                        diag=diag,
                     )
                 )
             else:
                 video.evaluate("v => { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); }")
+                page.wait_for_timeout(3000)
+                diag["video"] = _video_state(video)
                 while until is None or datetime.now(JST) < until:
+                    diag["shots"] += 1
                     readings.extend(
                         _read_shot(
                             video,
@@ -503,26 +541,35 @@ def _sample_player(
                     if until is not None and datetime.now(JST) >= until:
                         break
                     page.wait_for_timeout(interval_sec * 1000)
+        except Exception as exc:  # noqa: BLE001 - 通知で原因が分かるよう記録して空で返す
+            logger.info("プレイヤーの読み取りで例外 %s", exc)
+            diag["status"] = f"例外 {type(exc).__name__}: {str(exc)[:80]}"
         finally:
             browser.close()
     return readings
 
 
-def _sample_recording(page: Any, video: Any, *, tail_sec: int, step_sec: int, **kwargs: int) -> list[BoardRead]:
+def _sample_recording(
+    page: Any, video: Any, *, tail_sec: int, step_sec: int, diag: dict[str, Any], **kwargs: int
+) -> list[BoardRead]:
     duration = 0.0
     for _ in range(40):
         duration = float(video.evaluate("v => (isFinite(v.duration) ? v.duration : 0)") or 0)
         if duration > 1:
             break
         page.wait_for_timeout(300)
+    diag["video"] = _video_state(video)
     if duration <= 1:
         logger.info("再生時間を取得できませんでした")
+        diag["status"] = "再生時間を取得できず"
         return []
+    diag["status"] = f"録画{int(duration)}秒"
     readings: list[BoardRead] = []
     t = max(0.0, duration - tail_sec)
     while t < duration - 0.4:
         video.evaluate("(v, t) => { v.pause(); v.currentTime = t }", t)
         page.wait_for_timeout(900)
+        diag["shots"] += 1
         readings.extend(_read_shot(video, **kwargs))
         t += step_sec
     return readings
@@ -539,6 +586,27 @@ def _read_shot(video: Any, **kwargs: int) -> list[BoardRead]:
     if found is None:
         return []
     return [found]
+
+
+_VIDEO_STATE_JS = """v => {
+  const h264 = 'video/mp4; codecs="avc1.42E01E"';
+  const mse = window.MediaSource && MediaSource.isTypeSupported(h264);
+  return [
+    'ready=' + v.readyState,
+    'size=' + v.videoWidth + 'x' + v.videoHeight,
+    'paused=' + v.paused,
+    'err=' + (v.error ? v.error.code : '-'),
+    'h264=' + (v.canPlayType(h264) || 'no') + '/' + (mse ? 'mse' : 'nomse'),
+  ].join(',');
+}"""
+
+
+def _video_state(video: Any) -> str:
+    """再生できているかの手がかり（readyState・解像度・エラー・H.264対応）。"""
+    try:
+        return str(video.evaluate(_VIDEO_STATE_JS))
+    except Exception as exc:  # noqa: BLE001 - 診断用なので失敗しても続ける
+        return f"取得失敗 {type(exc).__name__}"
 
 
 def _find_video(page: Any) -> Any | None:
@@ -559,5 +627,10 @@ def _launch(playwright: Any) -> Any:
         "args": ["--autoplay-policy=no-user-gesture-required", "--mute-audio", "--disable-dev-shm-usage"],
     }
     if exe:
-        options["executable_path"] = exe
-    return playwright.chromium.launch(**options)
+        return playwright.chromium.launch(executable_path=exe, **options)
+    # 付属の Chromium は H.264 を再生できず、中継・録画が映らない。Google Chrome を優先する。
+    try:
+        return playwright.chromium.launch(channel="chrome", **options)
+    except Exception as exc:  # noqa: BLE001 - Chrome が無い環境では付属版で続ける
+        logger.info("Google Chrome を起動できないので付属の Chromium を使います（H.264 不可） %s", exc)
+        return playwright.chromium.launch(**options)

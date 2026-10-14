@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from loto6.live_board import TEMPLATES, BoardRead, read_result_board
-from loto6.live_watch import find_watch_link, page_links, parse_backnumber, parse_live_watch, settle
+from loto6.live_watch import describe_sampling, find_watch_link, page_links, parse_backnumber, parse_live_watch, settle
 from loto6.parser import Draw
 from loto6.rakuten_collect import _note_live_mismatch
 from loto6.storage import Store
@@ -181,6 +181,22 @@ class PrizeAmountTests(unittest.TestCase):
         self.assertEqual(found.numbers, (2, 3, 4, 5, 6, 7))
         self.assertEqual(found.amounts, (200, 5700))
         self.assertEqual(found.carryover, 300)
+
+
+class DescribeSamplingTests(unittest.TestCase):
+    def test_numbers_without_prizes_are_reported(self) -> None:
+        reading = BoardRead(numbers=(1, 2, 3, 4, 5, 6), bonuses=(7,))
+        text = describe_sampling([reading] * 3, {"status": "録画300秒", "shots": 30, "video": "ready=4"}, 3)
+        self.assertIn("撮影=30", text)
+        self.assertIn("結果表=3", text)
+        self.assertIn("金額あり=0", text)
+        self.assertIn("番号のみ確定=可", text)
+        self.assertIn("動画=ready=4", text)
+
+    def test_nothing_read(self) -> None:
+        text = describe_sampling([], {"status": "video要素なし"}, 3)
+        self.assertIn("状態=video要素なし", text)
+        self.assertIn("番号のみ確定=不可", text)
 
 
 class LiveStoreTests(unittest.TestCase):
