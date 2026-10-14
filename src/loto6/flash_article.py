@@ -165,12 +165,17 @@ def build_article(
     p1_amount = prize1.get("amount")
     carry = item.get("carryover_amount")
     stage = str(item.get("result_stage") or "official")
+    has_amounts = any(prize.get("amount") is not None for prize in prizes.values())
     numbers_text = "・".join(f"{n:02d}" for n in numbers)
 
-    if stage != "official":
+    if stage != "official" and not has_amounts:
         title = f"{label} {format_draw(draw_no)}　{numbers_text}"
+    elif p1_count and p1_amount is not None:
+        title = f"{label} {format_draw(draw_no)}　1等 {format_count(int(p1_count))} {format_yen(int(p1_amount))}"
+    elif p1_amount is not None:
+        title = f"{label} {format_draw(draw_no)}　1等 {format_yen(int(p1_amount))}"
     elif p1_count:
-        title = f"{label} {format_draw(draw_no)}　1等 {format_count(int(p1_count))} {format_yen(p1_amount if p1_amount is None else int(p1_amount))}"
+        title = f"{label} {format_draw(draw_no)}　1等 {format_count(int(p1_count))}"
     else:
         title = f"{label} {format_draw(draw_no)}　1等なし"
 
@@ -196,11 +201,14 @@ def build_article(
         carry=None if carry is None else int(carry),
         observations=observations,
         stage=stage,
+        has_amounts=has_amounts,
     )
     carry_text = _carry_text(
         p1_count=None if p1_count is None else int(p1_count),
+        p1_amount=None if p1_amount is None else int(p1_amount),
         carry=None if carry is None else int(carry),
         stage=stage,
+        has_amounts=has_amounts,
     )
     prev_no, next_no = store.neighbor_draw_nos(game, draw_no)
     return {
@@ -234,17 +242,27 @@ def _lead(
     carry: int | None,
     observations: list[str],
     stage: str = "official",
+    has_amounts: bool = False,
 ) -> str:
     parts = [f"{label}{format_draw(draw_no)}は{format_date(draw_date)}の抽せん。"]
     numbers_text = "・".join(f"{n:02d}" for n in numbers)
-    if stage != "official":
+    if stage != "official" and not has_amounts:
+        parts.append("速報（当せん金額は確定後に追記）。")
         parts.append(f"本数字は{numbers_text}。")
         if bonus2 is None:
             parts.append(f"ボーナスは{bonus:02d}。")
         else:
             parts.append(f"ボーナスは{bonus:02d}と{bonus2:02d}。")
-    elif p1_count:
+    elif p1_count and p1_amount is not None:
         parts.append(f"1等は{format_count(p1_count)}、{format_yen(p1_amount)}。")
+        if carry:
+            parts.append(f"キャリーは{format_yen(carry)}。")
+    elif p1_amount is not None:
+        parts.append(f"1等は{format_yen(p1_amount)}。")
+        if carry:
+            parts.append(f"キャリーは{format_yen(carry)}。")
+    elif p1_count:
+        parts.append(f"1等は{format_count(p1_count)}。")
         if carry:
             parts.append(f"キャリーは{format_yen(carry)}。")
     else:
@@ -264,13 +282,24 @@ def _lead_extra(observations: list[str]) -> str:
     return observations[0] if observations else ""
 
 
-def _carry_text(*, p1_count: int | None, carry: int | None, stage: str = "official") -> str:
-    if stage != "official":
+def _carry_text(
+    *,
+    p1_count: int | None,
+    carry: int | None,
+    stage: str = "official",
+    p1_amount: int | None = None,
+    has_amounts: bool = False,
+) -> str:
+    if stage != "official" and not has_amounts:
         return ""
     if p1_count:
         if carry:
             return f"1等は{format_count(p1_count)}。キャリーは{format_yen(carry)}。"
         return f"1等は{format_count(p1_count)}。"
+    if p1_amount is not None:
+        if carry:
+            return f"1等は{format_yen(p1_amount)}。キャリーは{format_yen(carry)}。"
+        return f"1等は{format_yen(p1_amount)}。"
     if carry:
         return f"1等はなし。キャリーは{format_yen(carry)}。"
     return "1等はなし。"

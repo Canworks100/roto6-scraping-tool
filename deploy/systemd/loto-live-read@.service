@@ -1,0 +1,22 @@
+[Unit]
+Description=Read the public draw broadcast for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loto
+Group=loto
+WorkingDirectory=/opt/loto
+Environment=PYTHONPATH=/opt/loto/src
+Environment=SITE_ORIGIN=https://lottery-analytics.com
+Environment=VITE_SITE_ORIGIN=https://lottery-analytics.com
+Environment=LOTO_WWW_DIR=/var/www/loto-stg
+EnvironmentFile=-/etc/vps-backup/discord.env
+EnvironmentFile=-/etc/loto/alert.env
+ExecStart=/opt/loto/scripts/live-read.sh %i
+# 18:50 開始、中継の締め 19:15、録画の締め 20:00 + 読み取り。20:15 の楽天収集より前に終わる。
+TimeoutStartSec=5400
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

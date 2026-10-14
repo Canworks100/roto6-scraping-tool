@@ -69,3 +69,23 @@ class PeriodAnalyzeTest(unittest.TestCase):
         self.assertEqual(by1["streak2"], 1)
         store.close()
         path.unlink(missing_ok=True)
+
+    def test_triples_carry_latest_draw_and_other_numbers(self) -> None:
+        path = Path(tempfile.gettempdir()) / "loto-analyze-triples-test.sqlite"
+        path.unlink(missing_ok=True)
+        store = Store(path)
+        store.save(_draw("loto6", 1, "2026-01-01", [1, 2, 3, 4, 5, 6], 7))
+        store.save(_draw("loto6", 2, "2026-01-05", [1, 2, 3, 10, 11, 12], 13))
+        store.save(_draw("loto6", 3, "2026-01-08", [7, 8, 9, 20, 21, 22], 23))
+        result = analyze(
+            store.load_draws(game="loto6"),
+            {"_game": "loto6", "lottery": {"min_number": 1, "max_number": 43, "main_count": 6, "bonus_count": 1}},
+        )
+        top = to_payload(result, "all")["triples_high"][0]
+        self.assertEqual((top["number_a"], top["number_b"], top["number_c"]), (1, 2, 3))
+        self.assertEqual(top["count"], 2)
+        self.assertEqual(top["last_draw_no"], 2)
+        self.assertEqual(top["last_draw_date"], "2026-01-05")
+        self.assertEqual(top["others"], [10, 11, 12])
+        store.close()
+        path.unlink(missing_ok=True)

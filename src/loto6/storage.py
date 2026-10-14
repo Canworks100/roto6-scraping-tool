@@ -218,11 +218,20 @@ class Store:
                 VALUES ({placeholders})
             """
         else:
+            assignments = []
+            for column in columns:
+                if column in ("game", "draw_no"):
+                    continue
+                if column == "sales_amount":
+                    # 楽天側は販売実績を持たない。空で上書きして消さない。
+                    assignments.append("sales_amount=COALESCE(excluded.sales_amount, draws.sales_amount)")
+                else:
+                    assignments.append(f"{column}=excluded.{column}")
             sql = f"""
                 INSERT INTO draws ({", ".join(columns)})
                 VALUES ({placeholders})
                 ON CONFLICT(game, draw_no) DO UPDATE SET
-                {", ".join(f"{column}=excluded.{column}" for column in columns if column not in ("game", "draw_no"))}
+                {", ".join(assignments)}
             """
         self.conn.execute(sql, values)
         self.conn.execute(
@@ -231,6 +240,29 @@ class Store:
         )
         self.conn.commit()
         return True
+
+    def set_sales_amount(self, game: str, draw_no: int, sales_amount: int) -> bool:
+        """販売実績だけを書く。同じ値なら False。"""
+        cur = self.conn.execute(
+            """
+            UPDATE draws SET sales_amount=?
+            WHERE game=? AND draw_no=? AND (sales_amount IS NULL OR sales_amount!=?)
+            """,
+            (int(sales_amount), game, int(draw_no), int(sales_amount)),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def draw_nos_missing_sales(self, game: str, min_draw_no: int) -> list[int]:
+        rows = self.conn.execute(
+            """
+            SELECT draw_no FROM draws
+            WHERE game=? AND sales_amount IS NULL AND draw_no>=?
+            ORDER BY draw_no
+            """,
+            (game, int(min_draw_no)),
+        )
+        return [int(row["draw_no"]) for row in rows]
 
     def draws_missing_prizes(self, game: str = "loto6") -> list[sqlite3.Row]:
         """等級金額がほぼ全て欠けている回（1等なし＋キャリーのみは含めない）。"""

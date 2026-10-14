@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 from urllib.parse import urljoin
 
@@ -13,12 +14,34 @@ from bs4 import BeautifulSoup
 
 from loto6.client import FetchError, HttpClient
 from loto6.games import get_game
-from loto6.parser import parse_rakuten_lastresults, parse_rakuten_month_html
-from loto6.storage import Store
+from loto6.parser import Draw, parse_rakuten_lastresults, parse_rakuten_month_html
+from loto6.storage import Store, _same_numbers
 
 logger = logging.getLogger("loto6")
+JST = ZoneInfo("Asia/Tokyo")
 
 SLUG = {"loto6": "loto6", "loto7": "loto7", "miniloto": "mini"}
+_live_mismatch_sent: set[tuple[str, int]] = set()
+
+
+def _note_live_mismatch(store: Store, game: str, draw: Draw) -> None:
+    """中継（live）と楽天の番号が違うときだけ、上書き前に一度通知する。"""
+    existing = store.get_draw(game, draw.draw_no)
+    if existing is None:
+        return
+    stage = existing["result_stage"] if "result_stage" in existing.keys() else "official"
+    if stage != "live":
+        return
+    if _same_numbers(existing, draw):
+        logger.info("[%s] 中継の番号は楽天と一致 第%s回", game, draw.draw_no)
+        return
+    key = (game, int(draw.draw_no))
+    if key in _live_mismatch_sent:
+        return
+    _live_mismatch_sent.add(key)
+    from loto6.notify import alert
+
+    alert(f"中継と楽天の番号が違います。{game} 第{draw.draw_no}回を楽天の値で上書きします。")
 
 
 def _rakuten_cfg(config: dict[str, Any]) -> dict[str, Any]:
@@ -47,7 +70,7 @@ def _client(config: dict[str, Any], path: str) -> HttpClient:
 
 
 def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback: int = 4) -> dict[str, int]:
-    """直近番号（lastresults）＋当月の月次ページで金額を足す。販売実績は null。"""
+    """直近番号（lastresults）＋当月の月次ページで金額を足す。販売実績は結果ページから補う。"""
     game_def = get_game(config, game)
     store = Store(Path(config["_sqlite_path"]))
     inserted = skipped = absent = failed = 0
@@ -75,11 +98,28 @@ def collect_rakuten_latest(config: dict[str, Any], game: str = "loto6", lookback
                 failed += 1
                 logger.error("[%s] 月次 %s 解析失敗: %s", game, yyyymm, exc)
 
-        if saved_nos:
+        sales_nos: list[int] = []
+        try:
+            from loto6.sales_fill import fill_missing_sales
+
+            sales = fill_missing_sales(config, game, store)
+            sales_nos = [int(draw_no) for draw_no in sales["draw_nos"]]
+            logger.info(
+                "[%s] 販売実績 埋めた%s / 失敗%s / 対象%s",
+                game,
+                sales["filled"],
+                sales["failed"],
+                sales["checked"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("[%s] 販売実績の補完に失敗: %s", game, exc)
+        refresh_nos = sorted(set(saved_nos) | set(sales_nos))
+        if refresh_nos:
             from loto6.flash_article import refresh_articles
 
-            n = refresh_articles(store, game_def, sorted(set(saved_nos)))
+            n = refresh_articles(store, game_def, refresh_nos)
             logger.info("[%s] 速報記事 %s件を自動生成", game, n)
+        changed += len(sales_nos)
         store.export_csv(Path(config["_csv_path"]), game=game)
     finally:
         store.close()
@@ -227,6 +267,25 @@ def check_draw_night_numbers(config: dict[str, Any], game: str) -> bool:
         store.close()
 
 
+def _log_lastresults_seen(game: str, draws: list) -> None:
+    """抽せん夜の実行ログに、最新回が当日分として載っていたかを残す。"""
+    now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+    today = datetime.now(JST).date().isoformat()
+    if not draws:
+        logger.info("[%s] lastresults 確認 %s 件数=0 当日掲載=no", game, now)
+        return
+    newest = max(draws, key=lambda d: d.draw_no)
+    draw_date = str(newest.draw_date or "")[:10]
+    logger.info(
+        "[%s] lastresults 確認 %s 最新 第%s回 抽せん日=%s 当日掲載=%s",
+        game,
+        now,
+        newest.draw_no,
+        draw_date or "不明",
+        "yes" if draw_date == today else "no",
+    )
+
+
 def _ingest_lastresults(
     config: dict[str, Any],
     game: str,
@@ -259,6 +318,7 @@ def _ingest_lastresults(
         min_number=int(game_def["min_number"]),
         max_number=int(game_def["max_number"]),
     )
+    _log_lastresults_seen(game, draws)
     inserted = skipped = changed = 0
     saved_nos: list[int] = []
     existing_max = max(store.existing_draw_nos(game), default=0)
@@ -267,6 +327,7 @@ def _ingest_lastresults(
         if draw.draw_no < floor:
             skipped += 1
             continue
+        _note_live_mismatch(store, game, draw)
         if store.save(draw, stage="numbers"):
             inserted += 1
             changed += 1
@@ -324,6 +385,7 @@ def _ingest_month(
     for draw in draws:
         if skip_existing is not None and draw.draw_no in skip_existing and not refresh:
             continue
+        _note_live_mismatch(store, game, draw)
         if store.save(draw, refresh=refresh, stage="official"):
             changed += 1
             saved.append(draw.draw_no)

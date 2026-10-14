@@ -54,6 +54,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="補完で変更があったとき静的サイトを再ビルドする",
     )
+    sales_parser = sub.add_parser("fill-sales", help="販売実績が空の直近回だけ埋める")
+    sales_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
+    sales_parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="販売実績を書けたとき静的サイトを再ビルドする",
+    )
 
     sub.add_parser("publish-static", help="静的サイトをビルドして LOTO_WWW_DIR へ同期する")
 
@@ -62,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
         help="抽せん日なのに当日番号が無いとき通知して非0終了する",
     )
     miss_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
+
+    live_parser = sub.add_parser("live-read", help="抽せん中の公開中継から結果ボードを読む")
+    live_parser.add_argument("--game", required=True, choices=["loto6", "loto7", "miniloto"])
+
+    score_parser = sub.add_parser("live-score", help="公開録画で読み取りの正解率を見る（公開しない）")
+    score_parser.add_argument("--game", default="all", choices=["all", "loto6", "loto7", "miniloto"])
+    score_parser.add_argument("--limit", type=int, default=3)
 
     import_parser = sub.add_parser("import-raw", help="data/raw のCSVをデータベースへ入れる")
     import_parser.add_argument("--game", default="loto6", choices=["loto6", "loto7", "miniloto"])
@@ -184,6 +198,35 @@ def main(argv: list[str] | None = None) -> int:
                 alert(f"LOTO静的ビルド失敗（補完後）: {exc}")
                 raise
         return exit_code
+    if args.command == "fill-sales":
+        from loto6.games import game_ids, get_game
+        from loto6.sales_fill import fill_missing_sales
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        total_filled = 0
+        for game in targets:
+            store = Store(Path(config["_sqlite_path"]))
+            try:
+                result = fill_missing_sales(config, game, store)
+                draw_nos = [int(draw_no) for draw_no in result["draw_nos"]]
+                if draw_nos:
+                    from loto6.flash_article import refresh_articles
+
+                    refresh_articles(store, get_game(config, game), draw_nos)
+            finally:
+                store.close()
+            print(f"{game}: filled={result['filled']} failed={result['failed']} checked={result['checked']}")
+            total_filled += int(result["filled"])
+        if args.publish and total_filled > 0:
+            from loto6.notify import alert
+            from loto6.publish import publish_from_config
+
+            try:
+                publish_from_config(config)
+            except Exception as exc:  # noqa: BLE001
+                alert(f"LOTO静的ビルド失敗（販売実績の補完後）: {exc}")
+                raise
+        return 0
     if args.command == "publish-static":
         from loto6.notify import alert
         from loto6.publish import publish_from_config
@@ -210,6 +253,30 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"OK {game}")
         return exit_code
+    if args.command == "live-read":
+        from loto6.live_watch import run_live
+        from loto6.notify import alert
+
+        try:
+            return run_live(config, args.game)
+        except Exception as exc:  # noqa: BLE001
+            alert(f"中継の読み取りに失敗 game={args.game}: {exc}")
+            raise
+    if args.command == "live-score":
+        from loto6.games import game_ids
+        from loto6.live_watch import score_game
+
+        targets = game_ids(config) if args.game == "all" else [args.game]
+        failed = False
+        for game in targets:
+            rows = score_game(config, game, limit=args.limit)
+            correct = sum(1 for row in rows if row["ok"])
+            print(f"{game} {correct}/{len(rows)}")
+            for row in rows:
+                print(f"  第{row['draw_no']}回 {'一致' if row['ok'] else '不一致'} read={row['read']} expected={row['expected']}")
+            if correct != len(rows) or not rows:
+                failed = True
+        return 1 if failed else 0
     if args.command == "import-raw":
         raw_dir = Path(args.raw_dir) if args.raw_dir else abs_path(config, "storage.raw_dir")
         import_raw(config, raw_dir=raw_dir, refresh=args.refresh, game=args.game)

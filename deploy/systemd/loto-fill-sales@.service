@@ -1,0 +1,20 @@
+[Unit]
+Description=Fill missing sales amounts for %i and publish when written
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=loto
+Group=loto
+WorkingDirectory=/opt/loto
+Environment=PYTHONPATH=/opt/loto/src
+Environment=SITE_ORIGIN=https://lottery-analytics.com
+Environment=VITE_SITE_ORIGIN=https://lottery-analytics.com
+Environment=LOTO_WWW_DIR=/var/www/loto-stg
+EnvironmentFile=-/etc/vps-backup/discord.env
+EnvironmentFile=-/etc/loto/alert.env
+ExecStart=/opt/loto/scripts/fill-sales.sh %i
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

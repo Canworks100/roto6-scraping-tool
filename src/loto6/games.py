@@ -64,6 +64,8 @@ def public_game_list(config: dict[str, Any]) -> list[dict[str, Any]]:
     items = []
     for gid in game_ids(config):
         g = get_game(config, gid)
+        prizes_raw = g.get("simu_prizes") or {}
+        simu_prizes = {int(k): int(v) for k, v in prizes_raw.items()}
         items.append(
             {
                 "id": gid,
@@ -73,6 +75,9 @@ def public_game_list(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "main_count": int(g["main_count"]),
                 "bonus_count": int(g["bonus_count"]),
                 "prize_grades": int(g["prize_grades"]),
+                "unit_price": int(g.get("unit_price") or 200),
+                "simu_grade1_base": int(g.get("simu_grade1_base") or 0),
+                "simu_prizes": simu_prizes,
                 "ready": bool(g.get("ready", True)),
             }
         )
