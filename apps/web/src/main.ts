@@ -1724,7 +1724,7 @@ async function renderSimu(seq: number) {
         "",
         `${simuTitle(info.id)}で${res.ticket_count.toLocaleString("ja-JP")}口（${formatYen(res.cost)}）買ってみた結果（${round}回目）`,
         `当せん番号 ${res.draw.numbers.map(pad2).join(" ")}${res.draw.bonuses.length ? `（${res.draw.bonuses.map(pad2).join(" ")}）` : ""}`,
-        `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター`,
+        `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター #宝くじ`,
       ].join("\n");
       const shareXWebUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
       // スマホは Web 共有だとアプリ内ブラウザでログインを求められるため、アプリを直接開く
