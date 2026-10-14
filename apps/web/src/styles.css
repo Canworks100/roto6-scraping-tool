@@ -2340,12 +2340,41 @@ table.data tbody tr.hot {
 .simu-share-buttons {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.simu-share-buttons .btn {
-  text-decoration: none;
+.simu-share-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+.simu-share-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.simu-share-icon:hover {
+  opacity: 0.85;
+}
+
+.simu-share-x {
+  background: #000000;
+}
+
+.simu-share-line {
+  background: #06c755;
+}
+
+.simu-share-line svg {
+  width: 24px;
+  height: 24px;
 }
 
 .simu-dialog {
