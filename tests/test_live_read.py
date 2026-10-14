@@ -16,7 +16,7 @@ DIGIT_W = 16
 
 
 def _stamp(canvas: np.ndarray, digit: str, x: int, y: int, scale: int = 3) -> None:
-    grid = np.fromiter((int(ch) for ch in TEMPLATES[digit]), dtype=np.uint8).reshape(DIGIT_H, DIGIT_W)
+    grid = np.fromiter((int(ch) for ch in TEMPLATES[digit][0]), dtype=np.uint8).reshape(DIGIT_H, DIGIT_W)
     for row in range(DIGIT_H):
         for col in range(DIGIT_W):
             color = (0, 0, 0) if grid[row, col] else (255, 255, 255)
@@ -72,6 +72,16 @@ class BoardReadTests(unittest.TestCase):
     def test_rejects_duplicate(self) -> None:
         image = _board(["02", "02", "04", "05", "06", "07"], ["08"])
         self.assertIsNone(read_result_board(image, main_count=6, bonus_count=1, min_number=1, max_number=43))
+
+    def test_reads_real_frame_2145(self) -> None:
+        # 第2145回の録画（Google Chrome で撮影、一時停止中の操作ボタン入り）。細い「1」と上の輪が小さい「8」
+        image = Image.open(Path(__file__).parent / "fixtures" / "live_board_loto6_2145.png")
+        found = read_result_board(image, main_count=6, bonus_count=1, min_number=1, max_number=43, prize_grades=5)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.numbers, (4, 6, 8, 11, 24, 27))
+        self.assertEqual(found.bonuses, (36,))
+        self.assertEqual(found.amounts, (17661500, 5874400, 91900, 2900, 1000))
+        self.assertEqual(found.carryover, 0)
 
 
 class CatalogTests(unittest.TestCase):
