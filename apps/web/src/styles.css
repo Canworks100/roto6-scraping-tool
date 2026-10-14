@@ -2372,6 +2372,21 @@ table.data tbody tr.hot {
   background: #06c755;
 }
 
+.simu-share-copy {
+  padding: 0;
+  border: 0;
+  background: #4b5563;
+  cursor: pointer;
+}
+
+.simu-share-icon svg.stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .simu-share-line svg {
   width: 24px;
   height: 24px;
