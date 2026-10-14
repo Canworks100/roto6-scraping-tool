@@ -1,3 +1,4 @@
+import { simuTitle } from "./simu";
 const SITE = "LOTO アナリティクス";
 
 const LABELS: Record<string, string> = {
@@ -284,9 +285,9 @@ export function setSeo(path: string, opts?: SeoOpts) {
     title = `お問い合わせ｜${SITE}`;
     description = LEGAL_DESC.contact;
   } else if (parts[0] === "simu") {
-    title = `ロト購入シミュレーター｜${SITE}`;
+    title = `${simuTitle(new URLSearchParams(location.search).get("game") || "loto6")}｜${SITE}`;
     description =
-      "ロト6・ロト7・ミニロトの口数と数字を入れて、疑似抽せんの結果と収支をその場で確認できます。";
+      "お金を使わずにロト6・ロト7・ミニロトの購入と抽選を体験できる無料シミュレーター。好きな数字やランダムな数字で複数口を試し、当せん額と購入金額に対する収支を確認できます。";
   } else if (parts[0] === "404") {
     title = NOT_FOUND_TITLE;
     description = NOT_FOUND_DESC;

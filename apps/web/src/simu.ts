@@ -129,7 +129,7 @@ export async function runSimu(opts: {
   const maxTickets = maxTicketsFor(unitPrice);
   const fixed = game.simu_prizes || {};
 
-  if (randomCount < 0) throw new SimuError("ランダム口数は0以上です");
+  if (randomCount < 0) throw new SimuError("まとめて追加した口数は0以上です");
   if (opts.tickets.length > MAX_HAND_TICKETS) {
     throw new SimuError(`手選びは${MAX_HAND_TICKETS}口までです`);
   }
@@ -257,4 +257,9 @@ export async function runSimu(opts: {
     details,
     max_tickets: maxTickets,
   };
+}
+
+export function simuTitle(game: string): string {
+  const label = game === "loto7" ? "LOTO7" : game === "miniloto" ? "ミニロト" : "LOTO6";
+  return `${label} シミュレーター`;
 }
