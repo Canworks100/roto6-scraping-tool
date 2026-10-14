@@ -2368,9 +2368,9 @@ body:has(.simu-dialog[open]) {
 }
 
 #simu-result .ball.match {
-  background: #dc2626;
-  border-color: #b91c1c;
-  color: #ffffff;
+  background: #fca5a5;
+  border-color: #dc2626;
+  color: #7f1d1d;
 }
 
 #simu-result .ball.simu-bonus-match {

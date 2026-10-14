@@ -1413,6 +1413,8 @@ async function renderSimu(seq: number) {
   let pick: number[] = [];
   let randomCount = 0;
   let bulkCount = "5";
+  /** 同じ購入内容で何回抽選したか（購入内容が変わったら0に戻す） */
+  let drawRound = 0;
 
   const fromQuery = queryNumbers().filter((n) => n >= info.min_number && n <= info.max_number);
   const uniqueQuery = [...new Set(fromQuery)].sort((a, b) => a - b);
@@ -1422,6 +1424,7 @@ async function renderSimu(seq: number) {
 
   const paint = () => {
     if (seq !== renderSeq) return;
+    drawRound = 0;
     const total = hand.length + randomCount;
     const cost = total * unit;
     const cartBodyHtml = () => {
@@ -1463,6 +1466,7 @@ async function renderSimu(seq: number) {
     };
 
     const refreshCart = () => {
+      drawRound = 0;
       const totalNow = hand.length + randomCount;
       const costNow = totalNow * unit;
       const costEl = document.querySelector(".play-cost");
@@ -1575,8 +1579,14 @@ async function renderSimu(seq: number) {
         const i = Math.floor(Math.random() * pool.length);
         nums.push(pool.splice(i, 1)[0]!);
       }
-      pick = nums.sort((a, b) => a - b);
-      syncPickUi();
+      const box = document.querySelector("#result")!;
+      if (hand.length >= 500) {
+        box.innerHTML = `<p class="error">手選びは500口までです</p>`;
+        return;
+      }
+      box.innerHTML = "";
+      hand = [...hand, nums.sort((a, b) => a - b)];
+      refreshCart();
     });
     const rndInput = document.querySelector("#rnd-count") as HTMLInputElement;
     const syncBulkInput = () => {
@@ -1630,6 +1640,8 @@ async function renderSimu(seq: number) {
       return;
     }
     drawing = true;
+    drawRound += 1;
+    const round = drawRound;
     const drawButton = document.querySelector("#do-simu") as HTMLButtonElement;
     drawButton.disabled = true;
     errorBox.innerHTML = "";
@@ -1637,7 +1649,7 @@ async function renderSimu(seq: number) {
     if (!dialog.open) dialog.showModal();
     dialog.scrollTop = 0;
     stage.hidden = false;
-    stage.innerHTML = `<div class="box simu-draw-box"><h2>抽せん結果</h2><div class="inner simu-draw-body"><p class="simu-spin-label">抽せん中…</p><div class="flash-balls simu-draw-balls simu-spin" id="spin-balls"></div></div></div>`;
+    stage.innerHTML = `<div class="box simu-draw-box"><h2>抽せん結果（${round}回目）</h2><div class="inner simu-draw-body"><p class="simu-spin-label">${round}回目の抽せん中…</p><div class="flash-balls simu-draw-balls simu-spin" id="spin-balls"></div></div></div>`;
     const spinEl = document.querySelector("#spin-balls")!;
     let frames = 0;
     const tick = () => {
@@ -1694,7 +1706,7 @@ async function renderSimu(seq: number) {
         )
         .join("");
       stage.innerHTML = `<div class="box simu-draw-box">
-        <h2>抽せん結果</h2>
+        <h2>抽せん結果（${round}回目）</h2>
         <div class="inner simu-draw-body">
           <div class="flash-balls simu-draw-balls">
             <span class="balls-main">${drawBalls}</span>
@@ -1734,7 +1746,7 @@ async function renderSimu(seq: number) {
         })
         .join("");
       box.innerHTML = `<div class="box">
-        <h2>明細</h2>
+        <h2>明細（${round}回目）</h2>
         <p class="inner simu-match-legend">赤：本数字一致 ／ 黄色：ボーナス数字一致</p>
         ${detailNote}
         <div class="inner pad0"><div class="table-wrap"><table class="data">
