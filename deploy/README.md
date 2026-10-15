@@ -80,6 +80,8 @@ Web は Cloudflare 経由、SSH は常に上記オリジン IP。
 | 転送内容の確認のみ | `./scripts/deploy-production.sh --dry-run` |
 | 差し戻しの確認のみ | `./scripts/rollback-production.sh --dry-run` |
 
+静的サイトは手元ではビルドしない。`deploy-production.sh` はアプリを同期したあと、本番サーバー上で `scripts/publish-static.sh` を実行し、本番DBから作る（速報記事は本番DBの全回から作るため）。新しいビルドのサイトマップ URL 数が配信中より1割以上少ないときは、配信せずに止まり、Webhook に通知する。意図して減らすときだけ `LOTO_ALLOW_SHRINK=1` を付けて `publish-static.sh` を実行する。
+
 ビルド時オリジン:
 
 ```bash
@@ -119,5 +121,14 @@ export VITE_SITE_ORIGIN=https://lottery-analytics.com
 - 日次で `data/loto.sqlite`（WAL なら `sqlite3 .backup`）
 - `journalctl -u loto-api -u loto-collect@loto6`
 - nginx access / error
+
+## 障害記録
+
+### 2026-10-14 速報記事 4,251 ページが 404
+
+- **起きたこと**: 10/14 18:34〜18:38 の `deploy-production.sh` が、手元のDBで作った `apps/web/dist`（169 URL）を `--delete` 付きで `/var/www/loto-stg` に同期した。速報記事（`/<game>/flash/<回>`）4,251 ページが 404 になり、サイトマップも 4,420 件から 169 件に減った。
+- **復旧**: 10/15 08:47 に本番で `publish-static.sh` を実行して作り直した（4,420 URL、サイトマップ全件 200）。置き換え前のサイトは `/var/backups/loto-stg-before-republish-20261015-084659.tar.gz`。
+- **再発防止**: 本番反映は本番サーバー上で本番DBからビルドする。ページ数が1割以上減るビルドは配信前に止める（上記「本番」）。
+- **同時期の別件**: 末尾「/」なしの URL で転送ループが起き、Search Console で「リダイレクト エラー」になっていた（10/14 15:33 修正）。
 
 **本番への反映・証明書取得・公開は、ユーザーの明示許可があるまで行わない。**
