@@ -368,6 +368,17 @@ function prizeCells(item: DrawItem, grades: number): string {
   }).join("");
 }
 
+/** ミニロトにはキャリーオーバーが無い */
+function hasCarryover(game: string): boolean {
+  return game !== "miniloto";
+}
+
+function totalCountCell(item: DrawItem, grades: number): string {
+  const counts = (item.prizes || []).filter((p) => p.grade <= grades && p.count != null);
+  if (!counts.length) return `<td class="num">—</td>`;
+  return `<td class="num">${formatCount(counts.reduce((sum, p) => sum + (p.count ?? 0), 0))}</td>`;
+}
+
 function carryCell(item: DrawItem): string {
   const amount = item.carryover_amount;
   if (amount == null) return `<td class="num">—</td>`;
@@ -806,7 +817,7 @@ async function renderHome(seq: number) {
   setSeo("/");
   setJsonLd(null);
   const cards = [];
-  const hubLinks = [];
+  const simuLinks = [];
   for (const g of games) {
     if (seq !== renderSeq) return;
     const { latest, pick } = await loadLatestAndPick(g.id);
@@ -818,8 +829,8 @@ async function renderHome(seq: number) {
         pick,
       }),
     );
-    hubLinks.push(
-      `<li><a href="/${g.id}" data-link>${esc(g.label)}のページへ</a></li>`,
+    simuLinks.push(
+      `<li><a href="/simu?game=${encodeURIComponent(g.id)}" data-link>${simuTitle(g.id)}</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`,
     );
   }
   paint(
@@ -834,8 +845,8 @@ async function renderHome(seq: number) {
       <div class="home-kpi">${cards.join("")}</div>
     </section>
     <section class="box home-dirs">
-      <h2>くじ種別</h2>
-      <div class="inner"><ul class="hub-link-list">${hubLinks.join("")}</ul></div>
+      <h2>シミュレーター</h2>
+      <div class="inner"><ul class="hub-link-list">${simuLinks.join("")}</ul></div>
     </section>
   `,
       undefined,
@@ -934,7 +945,7 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
       }
       <ul class="flash-meta">
         ${item.sales_amount == null ? "" : `<li>販売実績 ${formatYen(item.sales_amount)}</li>`}
-        <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
+        ${hasCarryover(game) ? `<li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>` : ""}
       </ul>
       <p class="flash-actions">
         <a class="btn btn-primary" href="/${game}/flash/${item.draw_no}" data-link>この回の速報</a>
@@ -950,8 +961,7 @@ async function renderLatest(game: string, info: GameInfo, seq: number) {
             ? `<p class="muted">${formatDraw(pick.next_draw_no)}（抽せん日 ${formatDate(pick.next_draw_date)}）</p>
                <div class="flash-balls">${numberBalls(pick.next)}</div>
                <p class="flash-actions">
-                 <a class="btn btn-primary" href="/${game}/generate" data-link>口数で作成</a>
-                 <a class="btn btn-ghost" href="/${game}/generate" data-link>次回予想ページ</a>
+                 <a class="btn btn-primary" href="/${game}/generate" data-link>次回予想ページ</a>
                </p>`
             : `<p class="muted">次回予想を読み込めませんでした。</p>
                <p class="flash-actions"><a class="btn btn-primary" href="/${game}/generate" data-link>次回予想ページ</a></p>`
@@ -1081,7 +1091,7 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
       ${article.carry_text ? `<p class="post-carry">${esc(article.carry_text)}</p>` : ""}
       <ul class="flash-meta">
         ${item.sales_amount == null ? "" : `<li>販売実績 ${formatYen(item.sales_amount)}</li>`}
-        <li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>
+        ${hasCarryover(game) ? `<li>キャリーオーバー ${formatYen(item.carryover_amount)}</li>` : ""}
       </ul>
       ${notes ? `<h3 class="post-h">この回の特徴</h3><ul class="post-notes">${notes}</ul>` : ""}
       <p class="flash-actions">
@@ -1139,6 +1149,10 @@ async function renderHistory(game: string, info: GameInfo) {
   const page = await loadPage(0);
   historyTotal = page.total;
   historyOffset = page.items.length;
+  const withCarry = hasCarryover(game);
+  const carryHead = withCarry ? `<th class="num">キャリー</th>` : "";
+  const histCells = (item: DrawItem) =>
+    `${prizeCells(item, grades)}${totalCountCell(item, grades)}${withCarry ? carryCell(item) : ""}`;
 
   const periodBarHtml = `<div class="period-bar" id="hist-period">
     ${periodKeys
@@ -1176,13 +1190,13 @@ async function renderHistory(game: string, info: GameInfo) {
       <div class="inner pad0">
         <div class="table-wrap">
           <table class="data" id="hist-table">
-            <thead><tr><th class="num">回</th><th>抽せん日</th><th>本数字／ボーナス</th>${prizeHeaders(grades)}<th class="num">キャリー</th></tr></thead>
+            <thead><tr><th class="num">回</th><th>抽せん日</th><th>本数字／ボーナス</th>${prizeHeaders(grades)}<th class="num">合計口数</th>${carryHead}</tr></thead>
             <tbody id="hist-body">${
               page.items.length
                 ? page.items
-                    .map((item) => drawRow(item, [], `${prizeCells(item, grades)}${carryCell(item)}`, game))
+                    .map((item) => drawRow(item, [], histCells(item), game))
                     .join("")
-                : `<tr><td colspan="${3 + grades + 1}">該当する回がありません。</td></tr>`
+                : `<tr><td colspan="${3 + grades + 1 + (withCarry ? 1 : 0)}">該当する回がありません。</td></tr>`
             }</tbody>
           </table>
         </div>
@@ -1223,7 +1237,7 @@ async function renderHistory(game: string, info: GameInfo) {
     historyOffset += more.items.length;
     document.querySelector("#hist-body")!.insertAdjacentHTML(
       "beforeend",
-      more.items.map((item) => drawRow(item, [], `${prizeCells(item, grades)}${carryCell(item)}`, game)).join(""),
+      more.items.map((item) => drawRow(item, [], histCells(item), game)).join(""),
     );
     const btn = document.querySelector("#more") as HTMLButtonElement | null;
     if (btn) {
@@ -1750,7 +1764,7 @@ async function renderSimu(seq: number) {
             <p class="play-cost">購入 ${res.ticket_count.toLocaleString("ja-JP")}口　${formatYen(res.cost)}　／　差引 ${formatYen(res.net)}</p>
           </div>
           ${gradeChips ? `<div class="chips">${gradeChips}</div>` : `<p class="muted">当たりなし</p>`}
-          <p class="muted simu-draw-meta">キャリーオーバー反映 ${formatYen(res.carryover_amount)}</p>
+          ${hasCarryover(info.id) ? `<p class="muted simu-draw-meta">キャリーオーバー反映 ${formatYen(res.carryover_amount)}</p>` : ""}
           <p class="muted simu-draw-meta">1等プール ${formatYen(res.grade1_pool)}</p>
         </div>
         <div class="simu-again">
@@ -2646,7 +2660,7 @@ async function renderGenerate(game: string, info: GameInfo) {
     </div>
     ${prevHtml}
     <div class="box">
-      <h2>口数で作成</h2>
+      <h2>次回予想を作成</h2>
       <div class="inner">
         <div class="toolbar" style="margin:0;border:0;padding:0">
           <label class="field">口数
@@ -2678,7 +2692,7 @@ async function renderGenerate(game: string, info: GameInfo) {
         <p>よく出た数字ほど選ばれやすい作り方です。抽せんは回ごとに独立しており、当せんを保証するものではありません。</p>
         <h3>次回予想（1口）</h3>
         <p>全期間の出現回数から、その回の1口を出します。結果が載ると前回の予想へ移し、いくつ当たったかを見せます。</p>
-        <h3>口数で作成</h3>
+        <h3>次回予想を作成</h3>
         <p>口数を指定して、その場で組み合わせを作ります。「出現の多い数字」か「均等」を選べます。期間も選べます。口どうしで同じ並びはできるだけ避けます。</p>
       </div>
     </div>

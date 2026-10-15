@@ -74,11 +74,11 @@ const GAME_DESC: Record<GameDescKey, (label: string) => string> = {
   analyze: (l) =>
     `${l}の出現回数や組み合わせなど、傾向を見る分析ページへの入口です。`,
   latest: (l) =>
-    `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
+    `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。${l === "ミニロト" ? "回号と抽せん日もこのページで確認できます。" : "キャリーオーバーの有無もこのページで確認できます。"}`,
   flash: (l) =>
     `${l}の当選番号と当せん金額を回号ごとに掲載。前後の回へそのまま移れるので、さかのぼりやすい構成です。`,
   history: (l) =>
-    `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+    `${l}の過去の当選番号や当せん金額を、${l === "ミニロト" ? "当せん口数" : "キャリーオーバー"}も含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   search: (l) =>
     `${l}で気になる数字を選ぶと、本数字に出た回が一覧に。お気に入りがいつ出たか、すぐ追えます。`,
   combo: (l) =>
@@ -122,7 +122,7 @@ function gameDesc(label: string, key: GameDescKey): string {
 function flashDrawDesc(label: string, padded: string, dateIso?: string): string {
   const md = formatMonthDay(dateIso || "");
   if (md) {
-    return `第${padded}回${label}の当選番号速報。${md}の抽選結果と当せん金額、キャリーオーバーを掲載。`;
+    return `第${padded}回${label}の当選番号速報。${md}の抽選結果と当せん金額${label === "ミニロト" ? "" : "、キャリーオーバー"}を掲載。`;
   }
   return `第${padded}回${label}の当選番号速報。抽選結果と当せん金額を掲載。`;
 }

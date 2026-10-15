@@ -1143,6 +1143,17 @@ table.data td.nums {
   margin: 0;
 }
 
+@media (min-width: 800px) {
+  .home-kpi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+  }
+
+  .home-dirs {
+    max-width: none;
+  }
+}
+
 .home-dir-row {
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
@@ -2199,6 +2210,15 @@ table.data tbody tr.hot {
     min-width: 6em;
     padding: 18px 14px;
     font-size: 13px;
+  }
+
+  /* 中央揃え（幅が足りないときは左端から横スクロール） */
+  .nav-pages a:first-child {
+    margin-left: auto;
+  }
+
+  .nav-pages a:last-child {
+    margin-right: auto;
   }
 
   .body {

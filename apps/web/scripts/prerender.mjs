@@ -39,7 +39,7 @@ const VIEWS = [
     path: "/latest",
     title: (l) => `${l} 当選番号（最新結果）｜${SITE}`,
     desc: (l) =>
-      `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
+      `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。${l === "ミニロト" ? "回号と抽せん日もこのページで確認できます。" : "キャリーオーバーの有無もこのページで確認できます。"}`,
   },
   {
     view: "flash",
@@ -53,7 +53,7 @@ const VIEWS = [
     path: "/history",
     title: (l) => `${l} 当選番号一覧（過去結果）｜${SITE}`,
     desc: (l) =>
-      `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+      `${l}の過去の当選番号や当せん金額を、${l === "ミニロト" ? "当せん口数" : "キャリーオーバー"}も含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   },
   {
     view: "analyze",
@@ -670,8 +670,9 @@ function ballsHtml(numbers, bonus) {
 
 function homeBody() {
   const cards = GAMES.map((game) => homeCardBody(game)).join("");
-  const hubLinks = GAMES.map(
-    (game) => `<li><a href="/${game.id}">${game.label}のページへ</a></li>`,
+  const simuLinks = GAMES.map(
+    (game) =>
+      `<li><a href="/simu?game=${game.id}">${game.id === "loto7" ? "LOTO7" : game.id === "miniloto" ? "ミニロト" : "LOTO6"} シミュレーター</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`,
   ).join("");
   return `<section class="home-fv">
     <header class="hub-head">
@@ -681,8 +682,8 @@ function homeBody() {
     <div class="home-kpi">${cards}</div>
   </section>
   <section class="box home-dirs">
-    <h2>くじ種別</h2>
-    <div class="inner"><ul class="hub-link-list">${hubLinks}</ul></div>
+    <h2>シミュレーター</h2>
+    <div class="inner"><ul class="hub-link-list">${simuLinks}</ul></div>
   </section>`;
 }
 
@@ -729,7 +730,7 @@ for (const game of GAMES) {
             <div class="inner">
               <p class="muted">${nextNo != null ? `第${pad4(nextNo)}回` : "次回"}${nextDate ? `（抽せん日 ${formatDateJa(nextDate)}）` : ""}</p>
               <div class="flash-balls"><span class="balls"><span class="balls-main">${nextNums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("")}</span></span></div>
-              <p><a href="/${game.id}/generate">口数で作成</a>　<a href="/${game.id}/generate">次回予想ページ</a></p>
+              <p><a href="/${game.id}/generate">次回予想ページ</a></p>
             </div></div>`
         : `<div class="box"><h2>${game.label}｜次回予想</h2>
             <div class="inner"><p><a href="/${game.id}/generate">次回予想ページ</a></p></div></div>`;
@@ -892,8 +893,10 @@ for (const game of GAMES) {
         body += `<ul>${prizeValues
           .map((v, i) => `<li>${i + 1}等 ${v == null ? "—" : `${Number(v).toLocaleString("ja-JP")}円`}</li>`)
           .join("")}</ul>`;
-        const carry = histHit.carryover_amount;
-        body += `<p>キャリーオーバー ${carry == null ? "—" : `${Number(carry).toLocaleString("ja-JP")}円`}</p>`;
+        if (game.id !== "miniloto") {
+          const carry = histHit.carryover_amount;
+          body += `<p>キャリーオーバー ${carry == null ? "—" : `${Number(carry).toLocaleString("ja-JP")}円`}</p>`;
+        }
       } else if (histHit.result_stage && histHit.result_stage !== "official") {
         body += `<p>速報（当せん金額は確定後に追記）</p>`;
       }
@@ -939,7 +942,7 @@ for (const game of GAMES) {
     body += `<p><a href="/${game.id}/flash">速報一覧</a>　<a href="/${game.id}/latest">最新結果</a></p></article>`;
     const md = formatMonthDay(drawDate);
     const desc = md
-      ? `第${padded}回${game.label}の当選番号速報。${md}の抽選結果と当せん金額、キャリーオーバーを掲載。`
+      ? `第${padded}回${game.label}の当選番号速報。${md}の抽選結果と当せん金額${game.label === "ミニロト" ? "" : "、キャリーオーバー"}を掲載。`
       : `第${padded}回${game.label}の当選番号速報。抽選結果と当せん金額を掲載。`;
     const wrapped = withCrumb(game, "flash", body, { drawNo: n });
     writePage(

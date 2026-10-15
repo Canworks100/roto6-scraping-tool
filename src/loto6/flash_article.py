@@ -172,7 +172,8 @@ def build_article(
     prize1 = prizes.get(1, {})
     p1_count = prize1.get("count")
     p1_amount = prize1.get("amount")
-    carry = item.get("carryover_amount")
+    # ミニロトにはキャリーオーバーが無い
+    carry = None if game == "miniloto" else item.get("carryover_amount")
     stage = str(item.get("result_stage") or "official")
     has_amounts = any(prize.get("amount") is not None for prize in prizes.values())
     numbers_text = "・".join(f"{n:02d}" for n in numbers)
