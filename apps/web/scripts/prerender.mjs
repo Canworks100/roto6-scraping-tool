@@ -262,6 +262,7 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${esc(imageAlt)}" />
     ${pub ? `<meta property="article:published_time" content="${esc(pub)}" />` : ""}
+    ${article?.unavailableAfter ? `<meta name="robots" content="index, follow, unavailable_after: ${esc(article.unavailableAfter)}" />` : ""}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="${esc(imageAbs)}" />
     <meta name="twitter:title" content="${esc(title)}" />
@@ -862,10 +863,15 @@ for (const game of GAMES) {
   const flashMap = gdata.flashes || {};
   const maxNo = latest?.draw_no || 0;
   const richStart = Math.max(1, maxNo - 49);
-  for (const [noStr, drawDate] of Object.entries(flashMap)) {
-    const n = Number(noStr);
+  const flashEntries = Object.entries(flashMap)
+    .map(([noStr, drawDate]) => [Number(noStr), drawDate])
+    .sort((a, b) => a[0] - b[0]);
+  for (const [i, [n, drawDate]] of flashEntries.entries()) {
     const path = `/${game.id}/flash/${n}`;
     const padded = pad4(n);
+    // 検索に出すのは次回抽せん日の終わりまで（次回が未収集なら予定日）
+    const nextDate = flashEntries[i + 1]?.[1] ?? gdata.next_draw_date;
+    const unavailableAfter = nextDate ? `${String(nextDate).slice(0, 10)}T23:59:59+09:00` : undefined;
     const dateJa = formatDateJa(drawDate);
     const headline = flashNewsHeadline(game.label, n, drawDate);
     const histHit = gdata.history?.find((h) => h.draw_no === n);
@@ -943,12 +949,11 @@ for (const game of GAMES) {
       wrapped.body,
       jsonLd,
       n >= richStart
-        ? { ogType: "article", image: eye, publishedTime: pub }
-        : { ogType: "article", publishedTime: pub },
+        ? { ogType: "article", image: eye, publishedTime: pub, unavailableAfter }
+        : { ogType: "article", publishedTime: pub, unavailableAfter },
       wrapped.breadcrumbLd,
     );
-    urls.push(path);
-    if (n >= richStart) lastmods[path] = drawDate;
+    // 速報記事は sitemap.xml に載せない（発見は news-sitemap.xml の直近分に任せる）
   }
 }
 

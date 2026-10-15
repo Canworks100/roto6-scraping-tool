@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from loto6.games import next_draw_date
 from loto6.storage import Store, row_to_draw
 
 
@@ -99,6 +100,14 @@ def article_or_build(store: Store, game_def: dict[str, Any], draw_no: int) -> di
         return None
     store.upsert_flash_article(article)
     return article
+
+
+def unavailable_after(store: Store, game: str, draw_no: int, draw_date: str) -> str:
+    """検索に出す期限。次回抽せん日の終わり（JST）。次回が未収集なら通常の曜日から求める。"""
+    _, next_no = store.neighbor_draw_nos(game, draw_no)
+    next_row = None if next_no is None else store.get_draw(game, next_no)
+    next_date = str(next_row["draw_date"])[:10] if next_row is not None else next_draw_date(game, draw_date)
+    return f"{next_date}T23:59:59+09:00"
 
 
 def list_articles(store: Store, game_def: dict[str, Any], limit: int, offset: int) -> dict[str, Any]:

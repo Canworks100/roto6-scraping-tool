@@ -318,6 +318,8 @@ export type FlashArticle = {
   item: DrawItem;
   prev_draw_no: number | null;
   next_draw_no: number | null;
+  /** 検索に出す期限（次回抽せん日の終わり、ISO 8601） */
+  unavailable_after?: string;
 };
 
 export function articles(game: string, limit = 20, offset = 0) {

@@ -1,7 +1,13 @@
 import unittest
 from pathlib import Path
 
-from loto6.flash_article import build_article, ensure_missing_articles, list_articles, refresh_articles
+from loto6.flash_article import (
+    build_article,
+    ensure_missing_articles,
+    list_articles,
+    refresh_articles,
+    unavailable_after,
+)
 from loto6.parser import Draw
 from loto6.storage import Store
 
@@ -88,6 +94,11 @@ class FlashArticleTest(unittest.TestCase):
         assert row2 is not None
         self.assertEqual(row2["title"], row["title"])
         self.assertGreaterEqual(row2["generated_at"], old_at)
+
+    def test_unavailable_after_is_end_of_next_draw_day(self) -> None:
+        self.assertEqual(unavailable_after(self.store, "loto6", 2, "2026-01-08"), "2026-01-12T23:59:59+09:00")
+        # 次回が未収集なら通常の抽せん曜日（月・木）から求める
+        self.assertEqual(unavailable_after(self.store, "loto6", 3, "2026-01-12"), "2026-01-15T23:59:59+09:00")
 
     def test_unknown_draw(self) -> None:
         self.assertIsNone(build_article(self.store, GAME, 99))

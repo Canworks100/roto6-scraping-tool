@@ -30,7 +30,7 @@ from loto6.analyze import (  # noqa: E402
 )
 from loto6.config import abs_path, load_config  # noqa: E402
 from loto6.eyecatch import eyecatch_svg  # noqa: E402
-from loto6.flash_article import article_or_build, list_articles  # noqa: E402
+from loto6.flash_article import article_or_build, list_articles, unavailable_after  # noqa: E402
 from loto6.games import get_game, next_draw_date, public_game_list  # noqa: E402
 from loto6.generate import generate_combos  # noqa: E402
 from loto6.storage import Store, row_to_draw  # noqa: E402
@@ -468,7 +468,8 @@ def article_detail(
     article = article_or_build(store, g, draw_no)
     if article is None:
         raise HTTPException(status_code=404, detail="記事がありません")
-    return article
+    # 保存済みの記事は次回の回が出る前に作られているため、期限は毎回引き直す
+    return {**article, "unavailable_after": unavailable_after(store, str(g["id"]), draw_no, article["draw_date"])}
 
 
 @app.get("/api/{game}/articles/{draw_no}/eyecatch.svg")

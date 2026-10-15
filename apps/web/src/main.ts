@@ -1042,6 +1042,7 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
     ogType: "article",
     image: eyeForMeta,
     publishedTime: `${String(article.draw_date).slice(0, 10)}T12:00:00+09:00`,
+    unavailableAfter: article.unavailable_after,
   });
   setJsonLd(
     flashNewsJsonLd({

@@ -253,6 +253,8 @@ export function setBreadcrumbJsonLd(items: BreadcrumbItem[] | null) {
 export type SeoOpts = {
   drawDate?: string;
   noindex?: boolean;
+  /** 速報記事など、この日時を過ぎたら検索から外す（ISO 8601） */
+  unavailableAfter?: string;
   ogType?: "website" | "article";
   image?: string;
   publishedTime?: string;
@@ -372,8 +374,8 @@ export function setSeo(path: string, opts?: SeoOpts) {
   const abs = absoluteUrl(cleanPath);
   const params = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
   const hasIndexQuery = params.has("period") || params.has("rows") || params.has("page");
-  const robots =
-    opts?.noindex || hasIndexQuery ? "noindex, follow" : "index, follow";
+  let robots = opts?.noindex || hasIndexQuery ? "noindex, follow" : "index, follow";
+  if (opts?.unavailableAfter) robots += `, unavailable_after: ${opts.unavailableAfter}`;
 
   document.title = title;
   ensureMeta("name", "description").setAttribute("content", description);
