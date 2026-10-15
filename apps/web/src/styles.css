@@ -2302,11 +2302,6 @@ table.data tbody tr.hot {
   }
 }
 
-.simu-games {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .simu-cart-title {
   margin: 16px 0 8px;
   font-size: 1.05rem;
@@ -2331,11 +2326,132 @@ table.data tbody tr.hot {
   padding: 8px 16px 16px;
 }
 
+.simu-share {
+  padding: 0 16px 20px;
+  text-align: center;
+}
+
+.simu-share-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted, #666);
+}
+
+.simu-share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.simu-share-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+.simu-share-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.simu-share-icon:hover {
+  opacity: 0.85;
+}
+
+.simu-share-x {
+  background: #000000;
+}
+
+.simu-share-line {
+  background: #06c755;
+}
+
+.simu-share-copy {
+  padding: 0;
+  border: 0;
+  background: #4b5563;
+  cursor: pointer;
+}
+
+.simu-share-icon svg.stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.simu-share-line svg {
+  width: 24px;
+  height: 24px;
+}
+
+.simu-dialog {
+  width: min(960px, calc(100% - 24px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.simu-dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+body:has(.simu-dialog[open]) {
+  overflow: hidden;
+}
+
+.simu-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.simu-dialog-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.simu-dialog-header .btn {
+  flex-shrink: 0;
+}
+
 .simu-stage {
   margin-top: 12px;
 }
 
+#simu-result .ball.match {
+  background: #fca5a5;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+
+#simu-result .ball.simu-bonus-match {
+  background: #ffeb00;
+  border-color: #b89f00;
+  color: #000000;
+}
+
+.simu-match-legend {
+  margin: 0;
+  font-size: 12px;
+}
+
 .simu-draw-body {
+  container-type: inline-size;
   padding-top: 28px;
   padding-bottom: 32px;
 }
@@ -2354,6 +2470,26 @@ table.data tbody tr.hot {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.simu-draw-balls .balls-bonus {
+  width: 100%;
+  justify-content: center;
+}
+
+.simu-draw-balls .balls-main {
+  width: 100%;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: clamp(3px, 2cqi, 10px);
+}
+
+.simu-draw-balls .balls-main .ball {
+  flex: 0 1 40px;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 1;
+  font-size: clamp(12px, 5cqi, 17px);
 }
 
 .simu-draw-balls .ball,

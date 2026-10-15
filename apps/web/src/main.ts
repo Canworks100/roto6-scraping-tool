@@ -19,7 +19,7 @@ import { isLegalPage, legalHtml } from "./legal";
 import { guideHtml, guideTitle, isGuideSlug } from "./guides";
 import { loadFavorites, saveFavorites } from "./favorites";
 import { affiliateFooter, hydrateAffiliate } from "./affiliate";
-import { runSimu, SimuError, type SimuGameDef } from "./simu";
+import { maxTicketsFor, simuTitle, runSimu, SimuError, type SimuGameDef } from "./simu";
 
 const root = document.querySelector("#app")!;
 let games: GameInfo[] = [];
@@ -120,7 +120,7 @@ const VIEW_CRUMB_LABEL: Record<string, string> = {
   generate: "次回予想",
   history: "結果一覧",
   combo: "予想診断",
-  simu: "ロト購入シミュレーター",
+  simu: "シミュレーター",
   flash: "速報",
   ranks: "金額ランキング",
   search: "数字検索",
@@ -258,7 +258,7 @@ function relatedFor(view: string, game: string, label: string): string {
     return `<div class="box"><h2>関連</h2><div class="inner related-links">
       <p><a href="${viewPath(game, "generate")}" data-link>次回予想</a></p>
       <p><a href="${viewPath(game, "latest")}" data-link>最新結果</a></p>
-      <p><a href="/simu?game=${encodeURIComponent(game)}" data-link>ロト購入シミュレーター</a></p>
+      <p><a href="/simu?game=${encodeURIComponent(game)}" data-link>${simuTitle(game)}</a></p>
     </div></div>`;
   }
   return "";
@@ -487,7 +487,7 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
   if (onSimu) {
     crumbs = [
       { name: "ホーム", path: "/" },
-      { name: "ロト購入シミュレーター" },
+      { name: simuTitle(navGame) },
     ];
   } else if (showCrumb && activeGame) {
     crumbs = crumbTrail(activeGame, activeView === "trends" ? "freq" : activeView, crumbOptsFromLocation(activeView));
@@ -754,7 +754,7 @@ function gameBlockHtml(opts: {
     hubLink(game, "freq", "出現回数") +
     hubLink(game, "pairs", "組み合わせ");
   const predictLinks = PREDICT_LINKS.map(([id, title]) => hubLink(game, id, title)).join("");
-  const simuLinks = `<li><a href="/simu?game=${encodeURIComponent(game)}" data-link>ロト購入シミュレーター</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`;
+  const simuLinks = `<li><a href="/simu?game=${encodeURIComponent(game)}" data-link>${simuTitle(game)}</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`;
   const guides = `<section class="game-block-sec hub-sec">
     <h3>ガイド</h3>
     <ul class="hub-link-list">
@@ -1396,6 +1396,15 @@ function toHalfWidthDigits(raw: string): string {
     .replace(/[^\d]/g, "");
 }
 
+function isSmartphone(): boolean {
+  if (/iPhone|iPod|Android/i.test(navigator.userAgent)) return true;
+  // iPadOS は Mac と同じ UA を返すため、タッチ対応で見分ける
+  return /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+}
+
+const COPY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>`;
+const CHECK_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
 async function renderSimu(seq: number) {
   try {
     games = (await api.listGames()).games;
@@ -1412,6 +1421,9 @@ async function renderSimu(seq: number) {
   let hand: number[][] = [];
   let pick: number[] = [];
   let randomCount = 0;
+  let bulkCount = "5";
+  /** 同じ購入内容で何回抽選したか（購入内容が変わったら0に戻す） */
+  let drawRound = 0;
 
   const fromQuery = queryNumbers().filter((n) => n >= info.min_number && n <= info.max_number);
   const uniqueQuery = [...new Set(fromQuery)].sort((a, b) => a - b);
@@ -1421,14 +1433,9 @@ async function renderSimu(seq: number) {
 
   const paint = () => {
     if (seq !== renderSeq) return;
+    drawRound = 0;
     const total = hand.length + randomCount;
     const cost = total * unit;
-    const gameTabs = games
-      .map(
-        (g) =>
-          `<button type="button" class="btn${g.id === info.id ? " btn-primary" : ""}" data-game="${g.id}">${esc(g.label)}</button>`,
-      )
-      .join("");
     const cartBodyHtml = () => {
       const handRows = hand
         .map((nums, i) => {
@@ -1446,7 +1453,7 @@ async function renderSimu(seq: number) {
           : "";
       const emptyRow =
         !hand.length && randomCount < 1
-          ? `<tr><td colspan="3" class="muted">まだ口がありません。数字を足すか、ランダム口数を入れてください。</td></tr>`
+          ? `<tr><td colspan="3" class="muted">「1口追加」または「まとめて追加」で購入内容を追加してください。</td></tr>`
           : "";
       return `${handRows}${randomRow}${emptyRow}`;
     };
@@ -1454,8 +1461,6 @@ async function renderSimu(seq: number) {
     const bindCartActions = () => {
       document.querySelector("#clear-random")?.addEventListener("click", () => {
         randomCount = 0;
-        const input = document.querySelector("#rnd-count") as HTMLInputElement | null;
-        if (input) input.value = "0";
         refreshCart();
       });
       document.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((btn) => {
@@ -1470,6 +1475,7 @@ async function renderSimu(seq: number) {
     };
 
     const refreshCart = () => {
+      drawRound = 0;
       const totalNow = hand.length + randomCount;
       const costNow = totalNow * unit;
       const costEl = document.querySelector(".play-cost");
@@ -1484,28 +1490,27 @@ async function renderSimu(seq: number) {
     root.innerHTML = shell(
       `
       <div class="box">
-        <h1>ロト購入シミュレーター</h1>
-        ${howto("種目を選び、数字を足すか口数でランダムを入れて、疑似抽せんの結果を見ます。")}
+        <h1>${simuTitle(info.id)}</h1>
+        ${howto("お金を使わずに、ロトの購入と抽選を体験できる無料シミュレーターです。好きな数字やランダムな数字で、何口買うと何等が当たり、いくら戻ってくるのかを試せます。購入金額・当せん額・差引の収支をまとめて確認できます。")}
         <div class="inner">
-          <div class="toolbar simu-games">${gameTabs}</div>
           <p class="muted">1口 ${formatYen(unit)}</p>
           <div class="slots" id="slots"></div>
           <div class="pad" id="pad" style="margin-top:8px"></div>
           <div class="toolbar" style="margin:8px 0 0;border:0;padding:0">
-            <button type="button" class="btn btn-primary" id="add-hand">この数字を1口追加</button>
-            <button type="button" class="btn" id="clear-pick">選択クリア</button>
-            <button type="button" class="btn" id="rnd-one">ランダム1口を追加</button>
+            <button type="button" class="btn btn-primary" id="add-hand">1口追加</button>
+            <button type="button" class="btn" id="clear-pick">クリア</button>
+            <button type="button" class="btn" id="rnd-one">ランダム選択</button>
           </div>
           <div class="toolbar" style="margin:12px 0 0;border:0;padding:0;flex-wrap:wrap;gap:8px">
-            <label class="field">ランダム口数
-              <input type="text" inputmode="numeric" pattern="[0-9]*" id="rnd-count" autocomplete="off" value="${randomCount}" />
+            <label class="field">まとめて追加口数
+              <input type="text" inputmode="numeric" pattern="[0-9]*" id="rnd-count" autocomplete="off" value="${bulkCount}" />
             </label>
-            <button type="button" class="btn" id="set-random">ランダム口数を反映</button>
+            <button type="button" class="btn" id="set-random">まとめて追加</button>
           </div>
           <h2 class="simu-cart-title">購入内容</h2>
           <div class="simu-cart-total">
             <p class="play-cost">合計 ${total.toLocaleString("ja-JP")}口　／　${formatYen(cost)}</p>
-            <button type="button" class="btn btn-primary" id="do-simu" ${total < 1 ? "disabled" : ""}>抽せんする</button>
+            <button type="button" class="btn btn-primary" id="do-simu" ${total < 1 ? "disabled" : ""}>抽選開始</button>
           </div>
           <div class="table-wrap"><table class="data">
             <thead><tr><th class="num">#</th><th>数字</th><th></th></tr></thead>
@@ -1513,8 +1518,15 @@ async function renderSimu(seq: number) {
           </table></div>
         </div>
       </div>
-      <div id="simu-stage" class="simu-stage" hidden></div>
-      <div id="result"></div>
+      <div id="result" role="alert"></div>
+      <dialog id="simu-dialog" class="simu-dialog" aria-labelledby="simu-dialog-title">
+        <div class="simu-dialog-header">
+          <h2 id="simu-dialog-title">${esc(info.label)} 抽せん</h2>
+          <button type="button" class="btn" id="close-simu-dialog" autofocus>閉じる</button>
+        </div>
+        <div id="simu-stage" class="simu-stage" aria-live="polite"></div>
+        <div id="simu-result" aria-live="polite"></div>
+      </dialog>
     `,
       info.id,
       "simu",
@@ -1550,12 +1562,6 @@ async function renderSimu(seq: number) {
     }
     syncPickUi();
 
-    document.querySelectorAll<HTMLButtonElement>("[data-game]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        history.pushState({}, "", `/simu?game=${btn.dataset.game}`);
-        void render();
-      });
-    });
     document.querySelector("#add-hand")!.addEventListener("click", () => {
       const box = document.querySelector("#result")!;
       if (pick.length !== info.main_count) {
@@ -1575,11 +1581,6 @@ async function renderSimu(seq: number) {
       syncPickUi();
     });
     document.querySelector("#rnd-one")!.addEventListener("click", () => {
-      const box = document.querySelector("#result")!;
-      if (hand.length >= 500) {
-        box.innerHTML = `<p class="error">手選びは500口までです</p>`;
-        return;
-      }
       const pool: number[] = [];
       for (let n = info.min_number; n <= info.max_number; n++) pool.push(n);
       const nums: number[] = [];
@@ -1587,32 +1588,46 @@ async function renderSimu(seq: number) {
         const i = Math.floor(Math.random() * pool.length);
         nums.push(pool.splice(i, 1)[0]!);
       }
+      const box = document.querySelector("#result")!;
+      if (hand.length >= 500) {
+        box.innerHTML = `<p class="error">手選びは500口までです</p>`;
+        return;
+      }
+      box.innerHTML = "";
       hand = [...hand, nums.sort((a, b) => a - b)];
-      paint();
+      refreshCart();
     });
     const rndInput = document.querySelector("#rnd-count") as HTMLInputElement;
-    const syncRandomFromInput = () => {
-      const digits = toHalfWidthDigits(rndInput.value);
-      if (rndInput.value !== digits) rndInput.value = digits;
-      if (digits === "") {
-        randomCount = 0;
-      } else {
-        const raw = Number(digits);
-        if (Number.isFinite(raw) && Number.isInteger(raw) && raw >= 0) {
-          randomCount = raw;
-        }
+    const syncBulkInput = () => {
+      bulkCount = toHalfWidthDigits(rndInput.value);
+      rndInput.value = bulkCount;
+    };
+    const addBulk = () => {
+      syncBulkInput();
+      const count = Number(bulkCount);
+      const box = document.querySelector("#result")!;
+      if (!Number.isSafeInteger(count) || count < 1) {
+        box.innerHTML = `<p class="error">まとめて追加口数は1以上の整数を入力してください。</p>`;
+        return;
       }
+      if (hand.length + randomCount + count > maxTicketsFor(unit)) {
+        box.innerHTML = `<p class="error">追加できる口数の上限を超えています。口数を減らしてください。</p>`;
+        return;
+      }
+      randomCount += count;
+      box.innerHTML = "";
       refreshCart();
     };
-    rndInput.addEventListener("input", syncRandomFromInput);
-    rndInput.addEventListener("blur", syncRandomFromInput);
-    document.querySelector("#set-random")!.addEventListener("click", syncRandomFromInput);
+    rndInput.addEventListener("input", syncBulkInput);
+    document.querySelector("#set-random")!.addEventListener("click", addBulk);
     rndInput.addEventListener("keydown", (ev) => {
-      if ((ev as KeyboardEvent).key === "Enter") {
+      if (ev.key === "Enter") {
         ev.preventDefault();
-        syncRandomFromInput();
+        addBulk();
       }
     });
+    const dialog = document.querySelector("#simu-dialog") as HTMLDialogElement;
+    document.querySelector("#close-simu-dialog")!.addEventListener("click", () => dialog.close());
     bindCartActions();
     document.querySelector("#do-simu")!.addEventListener("click", () => {
       void runDraw();
@@ -1621,17 +1636,29 @@ async function renderSimu(seq: number) {
     restorePagesNav();
   };
 
+  let drawing = false;
   const runDraw = async () => {
+    if (drawing || seq !== renderSeq) return;
     const total = hand.length + randomCount;
-    const box = document.querySelector("#result")!;
+    const errorBox = document.querySelector("#result")!;
+    const box = document.querySelector("#simu-result")!;
+    const dialog = document.querySelector("#simu-dialog") as HTMLDialogElement;
     const stage = document.querySelector("#simu-stage") as HTMLElement;
     if (total < 1) {
-      box.innerHTML = `<p class="error">1口以上入れてください</p>`;
+      errorBox.innerHTML = `<p class="error">1口以上入れてください</p>`;
       return;
     }
+    drawing = true;
+    drawRound += 1;
+    const round = drawRound;
+    const drawButton = document.querySelector("#do-simu") as HTMLButtonElement;
+    drawButton.disabled = true;
+    errorBox.innerHTML = "";
     box.innerHTML = "";
+    if (!dialog.open) dialog.showModal();
+    dialog.scrollTop = 0;
     stage.hidden = false;
-    stage.innerHTML = `<div class="box simu-draw-box"><h2>抽せん結果</h2><div class="inner simu-draw-body"><p class="simu-spin-label">抽せん中…</p><div class="flash-balls simu-draw-balls simu-spin" id="spin-balls"></div></div></div>`;
+    stage.innerHTML = `<div class="box simu-draw-box"><h2>抽せん結果（${round}回目）</h2><div class="inner simu-draw-body"><p class="simu-spin-label">${round}回目の抽せん中…</p><div class="flash-balls simu-draw-balls simu-spin" id="spin-balls"></div></div></div>`;
     const spinEl = document.querySelector("#spin-balls")!;
     let frames = 0;
     const tick = () => {
@@ -1681,32 +1708,106 @@ async function renderSimu(seq: number) {
       if (seq !== renderSeq) return;
       const drawBalls = res.draw.numbers.map((n) => `<span class="ball">${pad2(n)}</span>`).join("");
       const bonusBalls = res.draw.bonuses.map((n) => `<span class="ball bonus">${pad2(n)}</span>`).join("");
-      stage.innerHTML = `<div class="box simu-draw-box">
-        <h2>抽せん結果</h2>
-        <div class="inner simu-draw-body">
-          <div class="flash-balls simu-draw-balls">
-            <span class="balls-main">${drawBalls}</span>
-            <span class="balls-bonus">${bonusBalls}</span>
-          </div>
-          <p class="muted simu-draw-meta">キャリーオーバー反映 ${formatYen(res.carryover_amount)}</p>
-          <p class="muted simu-draw-meta">1等プール ${formatYen(res.grade1_pool)}</p>
-        </div>
-      </div>`;
       const gradeChips = res.by_grade
         .map(
           (g) =>
             `<span class="chip">${g.grade}等 ${g.count.toLocaleString("ja-JP")}口　各${formatYen(g.amount_each)}</span>`,
         )
         .join("");
+      const shareUrl = `${absoluteUrl("/simu")}?game=${encodeURIComponent(info.id)}`;
+      const shareGrades = res.by_grade.length
+        ? res.by_grade.map((g) => `${g.grade}等×${g.count.toLocaleString("ja-JP")}`).join("・")
+        : "当たりなし";
+      const shareText = [
+        `${res.prize_total > 0 ? "💰" : ""}【当せん額 ${formatYen(res.prize_total)}】`,
+        `${shareGrades}／差引 ${res.net > 0 ? "+" : ""}${formatYen(res.net)}`,
+        "",
+        `${simuTitle(info.id)}で${res.ticket_count.toLocaleString("ja-JP")}口（${formatYen(res.cost)}）買ってみた結果（${round}回目）`,
+        `当せん番号 ${res.draw.numbers.map(pad2).join(" ")}${res.draw.bonuses.length ? `（${res.draw.bonuses.map(pad2).join(" ")}）` : ""}`,
+        `#${info.label.replace(/\s+/g, "")} #ロトシミュレーター #宝くじ`,
+      ].join("\n");
+      const shareXWebUrl = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+      // スマホは Web 共有だとアプリ内ブラウザでログインを求められるため、アプリを直接開く
+      const isSp = isSmartphone();
+      const shareTextWithUrl = encodeURIComponent(`${shareText}\n${shareUrl}`);
+      const shareXUrl = isSp ? `twitter://post?message=${shareTextWithUrl}` : shareXWebUrl;
+      const shareLineUrl = isSp
+        ? `https://line.me/R/share?text=${shareTextWithUrl}`
+        : `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+      const shareTarget = isSp ? "" : ` target="_blank" rel="noopener"`;
+      const canNativeShare = typeof navigator.share === "function";
+      stage.innerHTML = `<div class="box simu-draw-box">
+        <h2>抽せん結果（${round}回目）</h2>
+        <div class="inner simu-draw-body">
+          <div class="flash-balls simu-draw-balls">
+            <span class="balls-main">${drawBalls}</span>
+            <span class="balls-bonus">${bonusBalls}</span>
+          </div>
+          <div class="play-total">
+            <p class="dx-summary">当せん額（払戻合計）</p>
+            <p class="dx-verdict">${formatYen(res.prize_total)}</p>
+            <p class="play-cost">購入 ${res.ticket_count.toLocaleString("ja-JP")}口　${formatYen(res.cost)}　／　差引 ${formatYen(res.net)}</p>
+          </div>
+          ${gradeChips ? `<div class="chips">${gradeChips}</div>` : `<p class="muted">当たりなし</p>`}
+          <p class="muted simu-draw-meta">キャリーオーバー反映 ${formatYen(res.carryover_amount)}</p>
+          <p class="muted simu-draw-meta">1等プール ${formatYen(res.grade1_pool)}</p>
+        </div>
+        <div class="simu-again">
+          <button type="button" class="btn btn-primary" id="do-simu-again">もう1回抽選する</button>
+        </div>
+        <div class="simu-share">
+          <p class="simu-share-title">結果をシェア</p>
+          <div class="simu-share-buttons">
+            <a class="simu-share-icon simu-share-x" id="share-x" href="${esc(shareXUrl)}"${shareTarget} aria-label="Xでポスト" title="Xでポスト"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+            <a class="simu-share-icon simu-share-line" id="share-line" href="${esc(shareLineUrl)}"${shareTarget} aria-label="LINEで送る" title="LINEで送る"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg></a>
+            <button type="button" class="simu-share-icon simu-share-copy" id="share-copy" aria-label="テキストをコピー" title="テキストをコピー">${COPY_ICON}</button>
+            ${canNativeShare ? `<button type="button" class="btn" id="share-native">その他で共有</button>` : ""}
+          </div>
+        </div>
+      </div>`;
+      if (isSp) {
+        // X アプリが無いときは Web の投稿画面へ切り替える
+        document.querySelector("#share-x")?.addEventListener("click", () => {
+          const fallback = window.setTimeout(() => {
+            if (document.visibilityState === "visible") location.href = shareXWebUrl;
+          }, 1500);
+          const cancel = () => {
+            if (document.visibilityState === "hidden") window.clearTimeout(fallback);
+          };
+          document.addEventListener("visibilitychange", cancel, { once: true });
+        });
+      }
+      document.querySelector("#share-native")?.addEventListener("click", () => {
+        navigator.share({ text: shareText, url: shareUrl }).catch(() => {
+          /* キャンセル時は何もしない */
+        });
+      });
+      document.querySelector("#share-copy")?.addEventListener("click", async () => {
+        const btn = document.querySelector("#share-copy") as HTMLButtonElement;
+        try {
+          await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+          btn.innerHTML = CHECK_ICON;
+          btn.setAttribute("aria-label", "コピー済");
+          btn.title = "コピー済";
+        } catch {
+          btn.setAttribute("aria-label", "コピーできませんでした");
+          btn.title = "コピーできませんでした";
+        }
+      });
       const detailNote = res.winners_only
         ? `<p class="muted">${res.detail_threshold}口を超えたため、当たり口だけ表示しています。</p>`
         : "";
       const detailRows = res.details
         .map((d) => {
-          const balls = d.numbers.map((n) => `<span class="ball">${pad2(n)}</span>`).join("");
+          const balls = d.numbers.map((n) => {
+            const mainHit = res.draw.numbers.includes(n);
+            const bonusHit = res.draw.bonuses.includes(n);
+            const hitClass = mainHit ? " match" : bonusHit ? " simu-bonus-match" : "";
+            const hitLabel = mainHit ? "（本数字一致）" : bonusHit ? "（ボーナス数字一致）" : "";
+            return `<span class="ball${hitClass}" aria-label="${pad2(n)}${hitLabel}">${pad2(n)}</span>`;
+          }).join("");
           return `<tr>
             <td class="num">${d.index}</td>
-            <td>${d.source === "hand" ? "手選び" : "ランダム"}</td>
             <td><span class="balls-main">${balls}</span></td>
             <td>${d.grade == null ? "—" : `${d.grade}等`}</td>
             <td class="num">${d.amount ? formatYen(d.amount) : "—"}</td>
@@ -1714,33 +1815,26 @@ async function renderSimu(seq: number) {
         })
         .join("");
       box.innerHTML = `<div class="box">
-        <h2>収支</h2>
-        <div class="play-total">
-          <p class="dx-verdict">${formatYen(res.prize_total)}</p>
-          <p class="dx-summary">払戻合計</p>
-          <p class="play-cost">購入 ${res.ticket_count.toLocaleString("ja-JP")}口　${formatYen(res.cost)}　／　差引 ${formatYen(res.net)}</p>
-        </div>
-        ${gradeChips ? `<div class="chips">${gradeChips}</div>` : `<p class="muted inner">当たりなし</p>`}
-        <div class="simu-again">
-          <button type="button" class="btn btn-primary" id="do-simu-again">もう1回抽選する</button>
-        </div>
-      </div>
-      <div class="box">
-        <h2>明細</h2>
+        <h2>明細（${round}回目）</h2>
+        <p class="inner simu-match-legend">赤：本数字一致 ／ 黄色：ボーナス数字一致</p>
         ${detailNote}
         <div class="inner pad0"><div class="table-wrap"><table class="data">
-          <thead><tr><th class="num">#</th><th>種別</th><th>数字</th><th>等級</th><th class="num">金額</th></tr></thead>
-          <tbody>${detailRows || `<tr><td colspan="5" class="muted">表示する口はありません</td></tr>`}</tbody>
+          <thead><tr><th class="num">#</th><th>数字</th><th>等級</th><th class="num">金額</th></tr></thead>
+          <tbody>${detailRows || `<tr><td colspan="4" class="muted">表示する口はありません</td></tr>`}</tbody>
         </table></div></div>
       </div>`;
       document.querySelector("#do-simu-again")?.addEventListener("click", () => {
         void runDraw();
       });
     } catch (err) {
+      if (seq !== renderSeq) return;
       stage.hidden = true;
       stage.innerHTML = "";
       const msg = err instanceof SimuError ? err.message : (err as Error).message;
-      box.innerHTML = `<p class="error">${esc(msg)}</p>`;
+      box.innerHTML = `<p class="error" role="alert">${esc(msg)}</p>`;
+    } finally {
+      drawing = false;
+      if (seq === renderSeq && drawButton.isConnected) drawButton.disabled = false;
     }
   };
 
