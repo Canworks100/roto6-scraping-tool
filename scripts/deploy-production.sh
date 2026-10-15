@@ -44,8 +44,7 @@ fi
 
 # 静的サイトは手元ではビルドしない。速報記事（/<game>/flash/<回>）は本番DBの全回から作るため、
 # 手元のDBで作ると記事ページが消える（2026-10-14 に 4420→169 URL になり記事が404になった）。
-BEFORE_URLS="$("${SSH[@]}" "grep -c '<loc>' ${REMOTE_WWW}/sitemap.xml" 2>/dev/null || echo 0)"
-echo "==> 現在のサイトマップ URL 数: ${BEFORE_URLS}"
+# ページ数が1割以上減るビルドは publish-static 側で配信前に止まる（配信中のサイトは変わらない）。
 
 echo "==> アプリ同期"
 rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
@@ -60,17 +59,11 @@ fi
 
 echo "==> 静的配信（本番サーバー上で本番DBからビルド）"
 if [[ "${DRY_RUN}" -eq 0 ]]; then
-  "${SSH[@]}" "cd ${REMOTE_APP}/apps/web && sudo -u loto -H npm ci --no-audit --no-fund"
   "${SSH[@]}" "sudo -u loto -H env SITE_ORIGIN=${SITE_ORIGIN} VITE_SITE_ORIGIN=${VITE_SITE_ORIGIN} LOTO_WWW_DIR=${REMOTE_WWW} ${REMOTE_APP}/scripts/publish-static.sh"
   "${SSH[@]}" "sudo -u www-data test -x ${REMOTE_WWW} && sudo -u www-data test -r ${REMOTE_WWW}/index.html" \
     || { echo "ERROR: ${REMOTE_WWW} が www-data から読めません"; exit 1; }
   "${SSH[@]}" "sudo systemctl restart loto-api"
-  AFTER_URLS="$("${SSH[@]}" "grep -c '<loc>' ${REMOTE_WWW}/sitemap.xml" 2>/dev/null || echo 0)"
-  echo "==> サイトマップ URL 数: ${BEFORE_URLS} → ${AFTER_URLS}"
-  if [[ "${BEFORE_URLS}" -gt 0 && "${AFTER_URLS}" -lt $(( BEFORE_URLS * 9 / 10 )) ]]; then
-    echo "ERROR: ページ数が1割以上減りました。記事が消えていないか確認してください（配信前の状態は ${BACKUP_DIR}/www）"
-    exit 1
-  fi
+  echo "==> サイトマップ URL 数: $("${SSH[@]}" "grep -c '<loc>' ${REMOTE_WWW}/sitemap.xml || true")"
 else
   echo "[dry-run] 本番サーバーでの npm ci / publish-static をスキップ"
 fi
