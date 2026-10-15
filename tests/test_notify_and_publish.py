@@ -6,7 +6,7 @@ from unittest import mock
 
 from loto6.notify import _payload_for, alert
 from loto6.parser import Draw
-from loto6.publish import _assert_www_readable
+from loto6.publish import _assert_not_shrunk, _assert_www_readable
 from loto6.storage import Store, _same_official
 
 
@@ -29,6 +29,44 @@ class WwwReadableTest(unittest.TestCase):
             os.chmod(root, 0o755)
             os.chmod(index, 0o644)
             _assert_www_readable(root)
+
+
+def _write_sitemap(root: Path, count: int) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    body = "".join(f"<url><loc>https://example.com/{i}</loc></url>" for i in range(count))
+    (root / "sitemap.xml").write_text(f"<urlset>{body}</urlset>", encoding="utf-8")
+
+
+class NotShrunkTest(unittest.TestCase):
+    def test_blocks_large_drop_and_alerts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dist, www = Path(tmp) / "dist", Path(tmp) / "www"
+            _write_sitemap(www, 4420)
+            _write_sitemap(dist, 169)
+            with mock.patch.dict(os.environ, {}, clear=False), mock.patch("loto6.notify.alert") as sent:
+                os.environ.pop("LOTO_ALLOW_SHRINK", None)
+                with self.assertRaises(RuntimeError):
+                    _assert_not_shrunk(dist, www)
+            sent.assert_called_once()
+            self.assertIn("4420 → 169", sent.call_args.args[0])
+
+    def test_allows_small_drop_growth_and_first_publish(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dist, www = Path(tmp) / "dist", Path(tmp) / "www"
+            _write_sitemap(dist, 100)
+            _assert_not_shrunk(dist, www)  # 配信先にサイトマップが無い初回
+            _write_sitemap(www, 105)
+            _assert_not_shrunk(dist, www)  # 1割未満の減少
+            _write_sitemap(dist, 200)
+            _assert_not_shrunk(dist, www)  # 増加
+
+    def test_override_env_allows_drop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dist, www = Path(tmp) / "dist", Path(tmp) / "www"
+            _write_sitemap(www, 4420)
+            _write_sitemap(dist, 169)
+            with mock.patch.dict(os.environ, {"LOTO_ALLOW_SHRINK": "1"}):
+                _assert_not_shrunk(dist, www)
 
 
 class NotifyTest(unittest.TestCase):

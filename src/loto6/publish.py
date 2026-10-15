@@ -62,6 +62,7 @@ def publish_static(
             timeout=900,
         )
         _assert_dist_ok(staging)
+        _assert_not_shrunk(staging, target)
         target.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             [
@@ -94,6 +95,37 @@ def _assert_dist_ok(dist: Path) -> None:
     for name in REQUIRED_DIST_FILES:
         if (dist / name).stat().st_size < 16:
             raise RuntimeError(f"ビルド成果物が空です: {dist / name}")
+
+
+# 新しいサイトマップの URL 数がこの割合を下回ったら配信しない。
+MIN_URL_RATIO = 0.9
+ALLOW_SHRINK_ENV = "LOTO_ALLOW_SHRINK"
+
+
+def _count_urls(sitemap: Path) -> int:
+    if not sitemap.is_file():
+        return 0
+    return sitemap.read_text(encoding="utf-8", errors="replace").count("<loc>")
+
+
+def _assert_not_shrunk(dist: Path, target: Path) -> None:
+    """配信中のサイトよりページが1割以上減るビルドは配信しない（DBの無い環境で作ったビルド等）。
+
+    意図して減らすときは LOTO_ALLOW_SHRINK=1 を付けて実行する。
+    """
+    before = _count_urls(target / "sitemap.xml")
+    after = _count_urls(dist / "sitemap.xml")
+    logger.info("サイトマップ URL 数 %s → %s", before, after)
+    if before == 0 or after >= before * MIN_URL_RATIO:
+        return
+    if os.environ.get(ALLOW_SHRINK_ENV) == "1":
+        logger.info("%s=1 のため URL 数の減少を許可します", ALLOW_SHRINK_ENV)
+        return
+    from loto6.notify import alert
+
+    message = f"静的ビルドのページ数が減ったため配信を止めました: {before} → {after} URL（{target} は変更なし）"
+    alert(message)
+    raise RuntimeError(message)
 
 
 def _assert_www_readable(target: Path) -> None:

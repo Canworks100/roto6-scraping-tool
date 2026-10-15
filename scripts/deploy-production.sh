@@ -26,12 +26,9 @@ mkdir -p "${BACKUP_DIR}"
 RSYNC_FLAGS=(-a --delete)
 # VPS 上の /opt/loto・/var/www は loto 所有。canworks は sudo rsync で書く。
 RSYNC_PATH=(--rsync-path="sudo rsync")
-# mkdtemp / ローカル dist の 0700 を配信 root に載せない
-RSYNC_WWW_FLAGS=(-a --delete --chmod=D755,F644)
 SSH=(ssh "${HOST}")
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   RSYNC_FLAGS+=(--dry-run -v)
-  RSYNC_WWW_FLAGS+=(--dry-run -v)
   echo "[dry-run] リモート変更・再起動は行いません"
 fi
 
@@ -45,15 +42,9 @@ if [[ "${DRY_RUN}" -eq 0 ]]; then
   "${SSH[@]}" "sudo cp -a ${REMOTE_APP}/data/loto.sqlite ${REMOTE_APP}/data/loto.sqlite.bak-${STAMP} && sudo chown loto:loto ${REMOTE_APP}/data/loto.sqlite.bak-${STAMP}" || true
 fi
 
-echo "==> フロントビルド"
-cd "${ROOT}/apps/web"
-if [[ "${DRY_RUN}" -eq 0 ]]; then
-  export SITE_ORIGIN VITE_SITE_ORIGIN
-  npm ci
-  npm run build
-else
-  echo "[dry-run] npm ci / npm run build をスキップ"
-fi
+# 静的サイトは手元ではビルドしない。速報記事（/<game>/flash/<回>）は本番DBの全回から作るため、
+# 手元のDBで作ると記事ページが消える（2026-10-14 に 4420→169 URL になり記事が404になった）。
+# ページ数が1割以上減るビルドは publish-static 側で配信前に止まる（配信中のサイトは変わらない）。
 
 echo "==> アプリ同期"
 rsync "${RSYNC_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
@@ -66,17 +57,15 @@ if [[ "${DRY_RUN}" -eq 0 ]]; then
   "${SSH[@]}" "sudo chown -R loto:loto ${REMOTE_APP} && sudo chmod +x ${REMOTE_APP}/scripts/*.sh || true"
 fi
 
-echo "==> 静的配信"
+echo "==> 静的配信（本番サーバー上で本番DBからビルド）"
 if [[ "${DRY_RUN}" -eq 0 ]]; then
-  rsync "${RSYNC_WWW_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" \
-    "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/"
-  "${SSH[@]}" "sudo chown -R loto:loto ${REMOTE_WWW}"
+  "${SSH[@]}" "sudo -u loto -H env SITE_ORIGIN=${SITE_ORIGIN} VITE_SITE_ORIGIN=${VITE_SITE_ORIGIN} LOTO_WWW_DIR=${REMOTE_WWW} ${REMOTE_APP}/scripts/publish-static.sh"
   "${SSH[@]}" "sudo -u www-data test -x ${REMOTE_WWW} && sudo -u www-data test -r ${REMOTE_WWW}/index.html" \
     || { echo "ERROR: ${REMOTE_WWW} が www-data から読めません"; exit 1; }
   "${SSH[@]}" "sudo systemctl restart loto-api"
+  echo "==> サイトマップ URL 数: $("${SSH[@]}" "grep -c '<loc>' ${REMOTE_WWW}/sitemap.xml || true")"
 else
-  rsync "${RSYNC_WWW_FLAGS[@]}" "${RSYNC_PATH[@]}" -e "ssh" "${ROOT}/apps/web/dist/" "${HOST}:${REMOTE_WWW}/" || \
-    echo "[dry-run] dist が無い場合はビルド後に再実行"
+  echo "[dry-run] 本番サーバーでの npm ci / publish-static をスキップ"
 fi
 
 echo "完了: backup=${BACKUP_DIR}"
