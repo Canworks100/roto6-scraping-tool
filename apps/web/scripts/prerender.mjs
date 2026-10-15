@@ -403,6 +403,7 @@ function chipNav(game, compact) {
         ["freq", "出現回数"],
         ["history", "結果一覧"],
         ["flash", "速報"],
+        ["simu", "シミュレーター"],
       ]
     : [
         ["latest", "最新結果"],
@@ -414,7 +415,7 @@ function chipNav(game, compact) {
       ];
   const links = pages
     .map(([id, t]) => {
-      const href = id === "simu" ? "/simu" : `/${game.id}/${id}`;
+      const href = id === "simu" ? `/simu?game=${game.id}` : `/${game.id}/${id}`;
       return `<a href="${href}">${t}</a>`;
     })
     .join("");
@@ -670,20 +671,12 @@ function ballsHtml(numbers, bonus) {
 
 function homeBody() {
   const cards = GAMES.map((game) => homeCardBody(game)).join("");
-  const simuLinks = GAMES.map(
-    (game) =>
-      `<li><a href="/simu?game=${game.id}">${game.id === "loto7" ? "LOTO7" : game.id === "miniloto" ? "ミニロト" : "LOTO6"} シミュレーター</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`,
-  ).join("");
   return `<section class="home-fv">
     <header class="hub-head">
       <h1 class="hub-title">LOTO アナリティクス</h1>
       <p class="hub-lead">ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！</p>
     </header>
     <div class="home-kpi">${cards}</div>
-  </section>
-  <section class="box home-dirs">
-    <h2>シミュレーター</h2>
-    <div class="inner"><ul class="hub-link-list">${simuLinks}</ul></div>
   </section>`;
 }
 

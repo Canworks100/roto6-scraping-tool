@@ -692,12 +692,16 @@ const HOME_QUICK: [string, string][] = [
   ["freq", "出現回数"],
   ["history", "結果一覧"],
   ["flash", "速報"],
+  ["simu", "シミュレーター"],
 ];
 
 function gameChipNav(game: string, label: string, compact = false): string {
   const items = compact ? HOME_QUICK : GAME_PAGES;
   const pages = items
-    .map(([id, title]) => `<a href="${viewPath(game, id)}" data-link>${title}</a>`)
+    .map(([id, title]) => {
+      const href = id === "simu" ? `/simu?game=${encodeURIComponent(game)}` : viewPath(game, id);
+      return `<a href="${href}" data-link>${title}</a>`;
+    })
     .join("");
   return `<nav class="chip-nav" aria-label="${esc(label)}のページ">${pages}</nav>`;
 }
@@ -817,7 +821,6 @@ async function renderHome(seq: number) {
   setSeo("/");
   setJsonLd(null);
   const cards = [];
-  const simuLinks = [];
   for (const g of games) {
     if (seq !== renderSeq) return;
     const { latest, pick } = await loadLatestAndPick(g.id);
@@ -828,9 +831,6 @@ async function renderHome(seq: number) {
         latest,
         pick,
       }),
-    );
-    simuLinks.push(
-      `<li><a href="/simu?game=${encodeURIComponent(g.id)}" data-link>${simuTitle(g.id)}</a><span class="hub-link-note">疑似購入で速攻結果</span></li>`,
     );
   }
   paint(
@@ -843,10 +843,6 @@ async function renderHome(seq: number) {
         <p class="hub-lead">${esc(PAGE_LEAD.home)}</p>
       </header>
       <div class="home-kpi">${cards.join("")}</div>
-    </section>
-    <section class="box home-dirs">
-      <h2>シミュレーター</h2>
-      <div class="inner"><ul class="hub-link-list">${simuLinks.join("")}</ul></div>
     </section>
   `,
       undefined,
