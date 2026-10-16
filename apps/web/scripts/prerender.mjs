@@ -587,6 +587,92 @@ function gameBlockBody(game) {
   </article>`;
 }
 
+const ANALYSIS_VIEWS = new Set(["freq", "pairs", "shape", "grid", "follow"]);
+
+function numKey(obj, n) {
+  return obj?.[n] ?? obj?.[String(n)];
+}
+
+/** 出現回数の多い順（同数は数字の小さい順）に [数字, 回数] */
+function rankedCounts(game, gdata) {
+  const rows = [];
+  for (let n = 1; n <= game.max; n++) rows.push([n, Number(numKey(gdata.counts, n) ?? 0)]);
+  return rows.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+}
+
+function analysisBody(game, gdata, view) {
+  const st = gdata.stats;
+  const latestNo = gdata.latest?.draw_no ?? 0;
+  const numLink = (n) => `<a href="/${game.id}/n/${pad2(n)}">${pad2(n)}</a>`;
+  if (view === "freq") {
+    const rows = rankedCounts(game, gdata)
+      .map(([n, k], i) => {
+        const last = numKey(st.last_seen, n);
+        const gap = last ? latestNo - last : null;
+        return `<tr><td class="num">${i + 1}位</td><td class="num">${numLink(n)}</td><td class="num">${k}回</td><td class="num">${last ? `第${pad4(last)}回` : "—"}</td><td class="num">${gap == null ? "—" : `${gap}回`}</td></tr>`;
+      })
+      .join("");
+    return `<p>第1回から第${pad4(latestNo)}回まで（全${st.total}回）の本数字の出現回数です。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th class="num">数字</th><th class="num">出現回数</th><th class="num">最終出現</th><th class="num">空き</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "pairs") {
+    const rows = st.triples
+      .map(([t, k], i) => `<tr><td class="num">${i + 1}位</td><td>${t.map(pad2).join("・")}</td><td class="num">${k}回</td></tr>`)
+      .join("");
+    return `<p>全${st.total}回の本数字で、3個そろって出た回数の多い組み合わせ上位20組です。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th>組み合わせ</th><th class="num">回数</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "shape") {
+    const pct = (k) => `${((k / st.total) * 100).toFixed(1)}%`;
+    const main = gdata.latest?.numbers?.length ?? 6;
+    const oddRows = st.odd
+      .map(([odd, k]) => `<tr><td>奇数${odd}個・偶数${main - odd}個</td><td class="num">${k}回</td><td class="num">${pct(k)}</td></tr>`)
+      .join("");
+    const sumRows = st.sums
+      .map(([from, k]) => `<tr><td>${from}〜${from + 19}</td><td class="num">${k}回</td><td class="num">${pct(k)}</td></tr>`)
+      .join("");
+    return `<h3>奇数と偶数の分かれ方（全${st.total}回）</h3>
+      <table class="data"><thead><tr><th>分かれ方</th><th class="num">回数</th><th class="num">割合</th></tr></thead><tbody>${oddRows}</tbody></table>
+      <h3>本数字の合計</h3>
+      <table class="data"><thead><tr><th>合計</th><th class="num">回数</th><th class="num">割合</th></tr></thead><tbody>${sumRows}</tbody></table>`;
+  }
+  if (view === "grid") {
+    const rows = (gdata.history || [])
+      .slice(0, 20)
+      .map((r) => `<tr><td><a href="/${game.id}/flash/${r.draw_no}">第${pad4(r.draw_no)}回</a></td><td>${formatDateJa(r.draw_date)}</td><td>${r.numbers.map(pad2).join(" ")}</td></tr>`)
+      .join("");
+    return `<p>直近20回の本数字です。</p>
+      <table class="data"><thead><tr><th>回</th><th>抽せん日</th><th>本数字</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "follow") {
+    const rows = [];
+    for (let n = 1; n <= game.max; n++) rows.push([n, Number(numKey(st.follow, n) ?? 0)]);
+    const body = rows
+      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      .map(([n, k], i) => `<tr><td class="num">${i + 1}位</td><td class="num">${numLink(n)}</td><td class="num">${k}回</td></tr>`)
+      .join("");
+    return `<p>前回の本数字に入っていた数字が、次の回にも本数字で出た回数です（全${st.total}回）。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th class="num">数字</th><th class="num">続けて出た回数</th></tr></thead><tbody>${body}</tbody></table>`;
+  }
+  return "";
+}
+
+function numberBody(game, gdata, n) {
+  const st = gdata.stats;
+  const latestNo = gdata.latest?.draw_no ?? 0;
+  const rank = rankedCounts(game, gdata).findIndex(([m]) => m === n) + 1;
+  const last = numKey(st.last_seen, n);
+  const comps = (numKey(st.companions, n) || [])
+    .map(([m, k]) => `<li><a href="/${game.id}/n/${pad2(m)}">${pad2(m)}</a>（${k}回）</li>`)
+    .join("");
+  return `<ul>
+      <li>出現回数の順位: ${game.max}個中${rank}位（全${st.total}回）</li>
+      <li>最終出現: ${last ? `<a href="/${game.id}/flash/${last}">第${pad4(last)}回</a>（${latestNo - last}回前）` : "—"}</li>
+      <li>前回から続けて出た回数: ${Number(numKey(st.follow, n) ?? 0)}回</li>
+    </ul>
+    ${comps ? `<h3>${pad2(n)}と一緒に出やすい数字</h3><ol>${comps}</ol>` : ""}`;
+}
+
 function hubBody(game) {
   return `<section class="hub">${gameBlockBody(game)}</section>`;
 }
@@ -705,9 +791,46 @@ for game in ("loto6", "loto7", "miniloto"):
                 encoding="utf-8",
             )
     counts = {i: 0 for i in range(1, MAXN[game] + 1)}
-    for r in c.execute(f"SELECT {cols} FROM draws WHERE game=?", (game,)):
-        for i in range(1, main + 1):
-            counts[int(r[f"n{i}"])] += 1
+    # 分析ページの静的HTML用（全期間・本数字）。JS 描画前でも中身が読めるようにする
+    from itertools import combinations
+    from collections import Counter
+    last_seen = {}
+    pair = Counter()
+    triple = Counter()
+    odd_dist = Counter()
+    sum_dist = Counter()
+    follow = Counter()
+    prev = set()
+    for r in c.execute(f"SELECT draw_no, {cols} FROM draws WHERE game=? ORDER BY draw_no", (game,)):
+        ns = sorted(int(r[f"n{i}"]) for i in range(1, main + 1))
+        for n in ns:
+            counts[n] += 1
+            last_seen[n] = int(r["draw_no"])
+            if n in prev:
+                follow[n] += 1
+        pair.update(combinations(ns, 2))
+        triple.update(combinations(ns, 3))
+        odd_dist[sum(n % 2 for n in ns)] += 1
+        sum_dist[sum(ns) // 20 * 20] += 1
+        prev = set(ns)
+    companions = {}
+    for n in range(1, MAXN[game] + 1):
+        with_n = Counter()
+        for (a, b), k in pair.items():
+            if a == n:
+                with_n[b] = k
+            elif b == n:
+                with_n[a] = k
+        companions[n] = [[m, k] for m, k in sorted(with_n.items(), key=lambda x: (-x[1], x[0]))[:5]]
+    stats = {
+        "last_seen": last_seen,
+        "companions": companions,
+        "triples": [[list(t), k] for t, k in sorted(triple.items(), key=lambda x: (-x[1], x[0]))[:20]],
+        "odd": sorted(odd_dist.items()),
+        "sums": sorted(sum_dist.items()),
+        "follow": follow,
+        "total": sum(odd_dist.values()),
+    }
     # 次回予想数字は頻度上位から決定的に選ぶ（ビルド用・クライアントと同値でなくてよい）
     top = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
     next_nums = sorted(n for n, _ in top[:main])
@@ -725,6 +848,7 @@ for game in ("loto6", "loto7", "miniloto"):
         "flashes": flash_map,
         "flash_times": flash_times,
         "counts": counts,
+        "stats": stats,
         "max": MAXN[game],
     }
 print(json.dumps(out, ensure_ascii=False))
@@ -907,6 +1031,12 @@ for (const game of GAMES) {
           <li class="analyze-item"><a href="/${game.id}/grid">出目表</a><p class="muted">直近の本数字を表で縦に並べて追えます。</p></li>
           <li class="analyze-item"><a href="/${game.id}/follow">前回を含む回数</a><p class="muted">前回と同じ数字がまた出た回数を数字ごとに見られます。</p></li>
         </ul></div>`;
+    } else if (ANALYSIS_VIEWS.has(view.view) && gdata.stats) {
+      const h1 = view.title(game.label).split("｜")[0];
+      body = `<div class="box"><h1>${h1}</h1><p class="howto">${esc(view.desc(game.label))}</p>
+        <div class="inner">${analysisBody(game, gdata, view.view)}
+        <p><a href="/${game.id}/analyze">分析</a>　<a href="/${game.id}/history">結果一覧</a></p></div></div>`;
+      lastmods[path] = latest?.draw_date;
     } else {
       const h1 = view.title(game.label).split("｜")[0];
       body = `<div class="box"><h1>${h1}</h1><p>${esc(view.desc(game.label))}</p>
@@ -931,8 +1061,9 @@ for (const game of GAMES) {
     const path = `/${game.id}/n/${nn}`;
     const count = gdata.counts?.[n] ?? gdata.counts?.[String(n)] ?? 0;
     const body = `<div class="box"><h1>${game.label} ${nn} の出現回数</h1>
-      <p>本数字としての出現回数: ${count}回</p>
-      <p><a href="/${game.id}/freq">出現回数一覧</a></p></div>`;
+      <div class="inner"><p>本数字としての出現回数: ${count}回</p>
+      ${gdata.stats ? numberBody(game, gdata, n) : ""}
+      <p><a href="/${game.id}/freq">出現回数一覧</a></p></div></div>`;
     const wrapped = withCrumb(game, "number", body, { number: n });
     writePage(
       path.slice(1),
