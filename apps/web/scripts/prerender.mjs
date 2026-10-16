@@ -268,16 +268,17 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(description)}" />`;
   out = out.replace("</head>", `${og}\n  </head>`);
+  // id は seo.ts の setJsonLd / setBreadcrumbJsonLd と揃える（JS 描画後に二重にしない）
   if (jsonLd) {
     out = out.replace(
       "</head>",
-      `    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`,
+      `    <script type="application/ld+json" id="jsonld-main">${JSON.stringify(jsonLd)}</script>\n  </head>`,
     );
   }
   if (breadcrumbLd) {
     out = out.replace(
       "</head>",
-      `    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}</script>\n  </head>`,
+      `    <script type="application/ld+json" id="jsonld-breadcrumb">${JSON.stringify(breadcrumbLd)}</script>\n  </head>`,
     );
   }
   out = out.replace(/<div id="app"><\/div>/, `<div id="app">${bodyHtml}</div>`);
