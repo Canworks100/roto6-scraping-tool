@@ -1047,7 +1047,8 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
     drawDate: article.draw_date,
     ogType: "article",
     image: eyeForMeta,
-    publishedTime: `${String(article.draw_date).slice(0, 10)}T12:00:00+09:00`,
+    publishedTime: article.published_at || undefined,
+    modifiedTime: article.updated_at || undefined,
     unavailableAfter: article.unavailable_after,
   });
   setJsonLd(
@@ -1059,6 +1060,8 @@ async function renderFlashArticle(game: string, info: GameInfo, drawNo: number) 
       url: absoluteUrl(`/${game}/flash/${drawNo}`),
       image: eyeForMeta,
       description: desc,
+      publishedAt: article.published_at,
+      updatedAt: article.updated_at,
     }),
   );
   root.innerHTML = shell(

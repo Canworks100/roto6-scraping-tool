@@ -262,6 +262,7 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${esc(imageAlt)}" />
     ${pub ? `<meta property="article:published_time" content="${esc(pub)}" />` : ""}
+    ${article?.modifiedTime ? `<meta property="article:modified_time" content="${esc(article.modifiedTime)}" />` : ""}
     ${article?.unavailableAfter ? `<meta name="robots" content="index, follow, unavailable_after: ${esc(article.unavailableAfter)}" />` : ""}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="${esc(imageAbs)}" />
@@ -608,6 +609,19 @@ MAXN = {"loto6": 43, "loto7": 37, "miniloto": 31}
 c = sqlite3.connect(p)
 c.row_factory = sqlite3.Row
 out = {"games": {}}
+from datetime import datetime, timezone as tz
+JST = tz(timedelta(hours=9))
+def to_jst(iso):
+    if not iso:
+        return None
+    try:
+        d = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=tz.utc)
+    return d.astimezone(JST).isoformat(timespec="seconds")
+has_published = "published_at" in {r[1] for r in c.execute("PRAGMA table_info(flash_articles)")}
 for game in ("loto6", "loto7", "miniloto"):
     main = MAIN[game]
     cols = ",".join(f"n{i}" for i in range(1, main + 1))
@@ -647,6 +661,14 @@ for game in ("loto6", "loto7", "miniloto"):
         (game,),
     ).fetchall()
     flash_map = {int(r["draw_no"]): r["draw_date"] for r in flashes}
+    # 速報記事の公開日時（最初に載せた時刻）と最終更新日時を日本時間で
+    flash_times = {}
+    if has_published:
+        for r in c.execute(
+            "SELECT draw_no, published_at, generated_at FROM flash_articles WHERE game=?",
+            (game,),
+        ):
+            flash_times[int(r["draw_no"])] = [to_jst(r["published_at"]), to_jst(r["generated_at"])]
     # 直近50回のアイキャッチを dist/og へ
     dist = __import__("os").environ.get("PRERENDER_DIST")
     if dist:
@@ -685,6 +707,7 @@ for game in ("loto6", "loto7", "miniloto"):
         "next_numbers": next_nums,
         "history": hist_rows,
         "flashes": flash_map,
+        "flash_times": flash_times,
         "counts": counts,
         "max": MAXN[game],
     }
@@ -928,7 +951,8 @@ for (const game of GAMES) {
     const headline = flashNewsHeadline(game.label, n, drawDate);
     const histHit = gdata.history?.find((h) => h.draw_no === n);
     const eye = `/og/${game.id}/${n}.svg?v=2`;
-    const pub = `${String(drawDate).slice(0, 10)}T12:00:00+09:00`;
+    // 実際に載せた時刻。記録が無い回（記事未生成）は日時を出さない
+    const [pub, modified] = gdata.flash_times?.[n] || [];
     let body = `<article class="post"><p class="flash-kicker">速報</p>`;
     if (n >= richStart) {
       body += `<figure class="post-eyecatch"><img src="${eye}" alt="${esc(headline)}" width="1200" height="630" /></figure>`;
@@ -958,8 +982,7 @@ for (const game of GAMES) {
             "@type": "NewsArticle",
             headline,
             description: `${headline}。本数字と当せん金額を掲載。`,
-            datePublished: pub,
-            dateModified: pub,
+            ...(pub ? { datePublished: pub, dateModified: modified || pub } : {}),
             mainEntityOfPage: loc(path),
             url: loc(path),
             image: [loc(eye)],
@@ -1003,8 +1026,8 @@ for (const game of GAMES) {
       wrapped.body,
       jsonLd,
       n >= richStart
-        ? { ogType: "article", image: eye, publishedTime: pub, unavailableAfter }
-        : { ogType: "article", publishedTime: pub, unavailableAfter },
+        ? { ogType: "article", image: eye, publishedTime: pub, modifiedTime: modified, unavailableAfter }
+        : { ogType: "article", publishedTime: pub, modifiedTime: modified, unavailableAfter },
       wrapped.breadcrumbLd,
     );
     // 速報記事は sitemap.xml に載せない（発見は news-sitemap.xml の直近分に任せる）
@@ -1032,18 +1055,19 @@ writeFileSync(
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`,
 );
 
-// Google News: 直近2日分の速報
+// Google News: 直近2日に公開した速報（公開日時は実際に載せた時刻）
 const newsCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
 const newsUrls = [];
 for (const game of GAMES) {
-  const flashMap = db.games?.[game.id]?.flashes || {};
+  const gdata = db.games?.[game.id] || {};
+  const flashMap = gdata.flashes || {};
   for (const [noStr, drawDate] of Object.entries(flashMap)) {
-    const t = Date.parse(String(drawDate).slice(0, 10));
-    if (!Number.isFinite(t) || t < newsCutoff) continue;
     const n = Number(noStr);
+    const pub = gdata.flash_times?.[n]?.[0];
+    const t = pub ? Date.parse(pub) : NaN;
+    if (!Number.isFinite(t) || t < newsCutoff) continue;
     const path = `/${game.id}/flash/${n}`;
     const headline = flashNewsHeadline(game.label, n, drawDate);
-    const pub = String(drawDate).slice(0, 10);
     newsUrls.push({ path, headline, pub });
   }
 }

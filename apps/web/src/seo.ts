@@ -258,6 +258,7 @@ export type SeoOpts = {
   ogType?: "website" | "article";
   image?: string;
   publishedTime?: string;
+  modifiedTime?: string;
   /** 指定時はパス解決より優先（404 など） */
   title?: string;
   description?: string;
@@ -401,8 +402,12 @@ export function setSeo(path: string, opts?: SeoOpts) {
   ensureMeta("property", "og:image:width").setAttribute("content", "1200");
   ensureMeta("property", "og:image:height").setAttribute("content", "630");
   ensureMeta("property", "og:image:alt").setAttribute("content", imageAlt);
-  if (opts?.publishedTime) {
-    ensureMeta("property", "article:published_time").setAttribute("content", opts.publishedTime);
+  for (const [prop, value] of [
+    ["article:published_time", opts?.publishedTime],
+    ["article:modified_time", opts?.modifiedTime],
+  ] as const) {
+    if (value) ensureMeta("property", prop).setAttribute("content", value);
+    else document.head.querySelector(`meta[property="${prop}"]`)?.remove();
   }
   ensureMeta("name", "twitter:card").setAttribute("content", "summary_large_image");
   ensureMeta("name", "twitter:image").setAttribute("content", imageAbs);
@@ -444,12 +449,12 @@ export function flashNewsJsonLd(opts: {
   url: string;
   image: string;
   description: string;
+  /** 公開日時・最終更新日時（実際に載せた時刻） */
+  publishedAt?: string | null;
+  updatedAt?: string | null;
 }): Record<string, unknown> {
   const headline = flashNewsHeadline(opts.label, opts.drawNo, opts.drawDate);
   const imageAbs = absoluteUrl(opts.image);
-  const datePub = /^\d{4}-\d{2}-\d{2}/.test(opts.drawDate)
-    ? `${opts.drawDate.slice(0, 10)}T12:00:00+09:00`
-    : opts.drawDate;
   const list = drawResultJsonLd({
     label: opts.label,
     drawNo: opts.drawNo,
@@ -465,8 +470,8 @@ export function flashNewsJsonLd(opts: {
         "@type": "NewsArticle",
         headline,
         description: opts.description,
-        datePublished: datePub,
-        dateModified: datePub,
+        ...(opts.publishedAt ? { datePublished: opts.publishedAt } : {}),
+        ...(opts.updatedAt || opts.publishedAt ? { dateModified: opts.updatedAt || opts.publishedAt } : {}),
         mainEntityOfPage: opts.url,
         url: opts.url,
         image: [imageAbs],

@@ -117,10 +117,16 @@ class Store:
                 lead TEXT NOT NULL,
                 payload TEXT NOT NULL,
                 generated_at TEXT NOT NULL,
+                published_at TEXT,
                 PRIMARY KEY (game, draw_no)
             )
             """
         )
+        # 公開日時（最初に保存した時刻）。記事を作り直しても変えない
+        article_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(flash_articles)").fetchall()}
+        if "published_at" not in article_cols:
+            self.conn.execute("ALTER TABLE flash_articles ADD COLUMN published_at TEXT")
+        self.conn.execute("UPDATE flash_articles SET published_at = generated_at WHERE published_at IS NULL")
         self.conn.commit()
 
     def _migrate_legacy_if_needed(self) -> None:
@@ -422,8 +428,8 @@ class Store:
         payload = json.dumps(article, ensure_ascii=False)
         self.conn.execute(
             """
-            INSERT INTO flash_articles (game, draw_no, title, lead, payload, generated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO flash_articles (game, draw_no, title, lead, payload, generated_at, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(game, draw_no) DO UPDATE SET
                 title=excluded.title,
                 lead=excluded.lead,
@@ -437,10 +443,33 @@ class Store:
                 article["lead"],
                 payload,
                 article["generated_at"],
+                article["generated_at"],
             ),
         )
         if commit:
             self.conn.commit()
+
+    def flash_article_times(self, game: str, draw_no: int) -> tuple[str | None, str | None]:
+        """（公開日時, 最終更新日時）。どちらも UTC の ISO 8601。"""
+        row = self.conn.execute(
+            "SELECT published_at, generated_at FROM flash_articles WHERE game=? AND draw_no=?",
+            (game, draw_no),
+        ).fetchone()
+        if row is None:
+            return None, None
+        return row["published_at"], row["generated_at"]
+
+    def set_flash_published_at(self, game: str, draw_no: int, published_at: str) -> bool:
+        """公開日時を記録より早い時刻に直す（遅い時刻では上書きしない）。"""
+        cur = self.conn.execute(
+            """
+            UPDATE flash_articles SET published_at = ?
+            WHERE game = ? AND draw_no = ?
+              AND (published_at IS NULL OR julianday(published_at) > julianday(?))
+            """,
+            (published_at, game, draw_no, published_at),
+        )
+        return cur.rowcount > 0
 
     def get_flash_article_row(self, game: str, draw_no: int) -> sqlite3.Row | None:
         return self.conn.execute(

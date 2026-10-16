@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from loto6.games import next_draw_date
@@ -100,6 +100,24 @@ def article_or_build(store: Store, game_def: dict[str, Any], draw_no: int) -> di
         return None
     store.upsert_flash_article(article)
     return article
+
+
+def _to_jst(iso: str | None) -> str | None:
+    if not iso:
+        return None
+    try:
+        parsed = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+
+
+def article_times(store: Store, game: str, draw_no: int) -> dict[str, str | None]:
+    """記事の公開日時（最初に保存した時刻）と最終更新日時。日本時間の ISO 8601。"""
+    published, updated = store.flash_article_times(game, draw_no)
+    return {"published_at": _to_jst(published), "updated_at": _to_jst(updated)}
 
 
 def unavailable_after(store: Store, game: str, draw_no: int, draw_date: str) -> str:
