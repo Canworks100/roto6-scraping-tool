@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import unittest
 
+from loto6.analyze import ticket_grade
 from loto6.simu import DETAIL_THRESHOLD, SimuError, max_tickets_for, run_simu, unit_price_for
 
 
@@ -124,6 +125,16 @@ class SimuTests(unittest.TestCase):
         )
         self.assertEqual(result["unit_price"], 300)
         self.assertEqual(result["cost"], 300)
+
+    def test_loto7_grade6_needs_bonus(self) -> None:
+        mains = {1, 2, 3, 4, 5, 6, 7}
+        bonuses = {8, 9}
+        self.assertEqual(ticket_grade({1, 2, 3, 10, 11, 12, 13}, mains, bonuses, 7)[0], None)
+        self.assertEqual(ticket_grade({1, 2, 3, 8, 11, 12, 13}, mains, bonuses, 7)[0], 6)
+        self.assertEqual(ticket_grade({1, 2, 3, 4, 11, 12, 13}, mains, bonuses, 7)[0], 5)
+
+    def test_loto6_grade5_without_bonus(self) -> None:
+        self.assertEqual(ticket_grade({1, 2, 3, 10, 11, 12}, {1, 2, 3, 4, 5, 6}, {7}, 6)[0], 5)
 
 
 if __name__ == "__main__":

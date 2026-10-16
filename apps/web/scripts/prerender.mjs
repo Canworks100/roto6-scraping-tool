@@ -12,7 +12,7 @@ const dist = distEnv
   : join(root, "dist");
 const repo = join(root, "..", "..");
 const origin = (process.env.SITE_ORIGIN || process.env.VITE_SITE_ORIGIN || "").replace(/\/+$/, "");
-const SITE = "LOTO アナリティクス";
+const SITE = "LOTOアナリティクス";
 
 const GAMES = [
   { id: "loto6", label: "ロト6", max: 43 },
@@ -284,6 +284,63 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
   return out;
 }
 
+const SHELL_PAGES = [
+  ["latest", "最新結果"],
+  ["generate", "次回予想"],
+  ["history", "結果一覧"],
+  ["analyze", "分析"],
+  ["combo", "予想診断"],
+  ["simu", "シミュレーター"],
+];
+
+function shellNavHighlight(view) {
+  if (view === "flash") return "latest";
+  if (view === "ranks" || view === "search") return "history";
+  if (["freq", "pairs", "shape", "grid", "follow"].includes(view)) return "analyze";
+  return view;
+}
+
+/** main.ts の shell() と同じ外枠。JS の描画前に素の本文が全幅で大きく出るのを防ぐ */
+function siteShell(path, bodyHtml) {
+  const parts = path.replace(/^\//, "").split("/").filter(Boolean);
+  const onSimu = parts[0] === "simu";
+  const game = GAMES.some((g) => g.id === parts[0]) ? parts[0] : undefined;
+  const view = parts[1] === "n" ? "number" : parts[1] || "hub";
+  const gameLinks = GAMES.map((g) => {
+    const on = g.id === game;
+    const href = onSimu ? `/simu?game=${g.id}` : `/${g.id}`;
+    return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""}>${g.label}</a>`;
+  }).join("");
+  let pagesNav = "";
+  if (game || onSimu) {
+    const navGame = game || "loto6";
+    const highlight = onSimu ? "simu" : shellNavHighlight(view);
+    pagesNav = `<nav class="nav-pages" aria-label="ページ">${SHELL_PAGES.map(([id, label]) => {
+      const on = highlight === id;
+      const href = id === "simu" ? "/simu" : `/${navGame}/${id}`;
+      return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
+    }).join("")}</nav>`;
+  }
+  return `<header class="site-head">
+      <div class="topbar">
+        <a class="brand" href="/">LOTO <span>アナリティクス</span></a>
+        <nav class="nav-games" aria-label="ロト">${gameLinks}</nav>
+      </div>
+      ${pagesNav}
+    </header>
+    <main class="body">${bodyHtml}</main>
+    <footer class="footer">
+      <nav class="footer-nav">
+        <a href="/about">このサイトについて</a>
+        <a href="/disclaimer">免責事項</a>
+        <a href="/privacy">プライバシーポリシー</a>
+        <a href="/terms">利用規約</a>
+        <a href="/contact">お問い合わせ</a>
+      </nav>
+      <p class="copy">© 2026 LOTO アナリティクス</p>
+    </footer>`;
+}
+
 function writePage(path, title, description, bodyHtml, jsonLd, article, breadcrumbLd) {
   const dir = join(dist, path.replace(/^\//, ""));
   mkdirSync(dir, { recursive: true });
@@ -291,7 +348,7 @@ function writePage(path, title, description, bodyHtml, jsonLd, article, breadcru
     title,
     description,
     canonical: loc(path || "/"),
-    bodyHtml,
+    bodyHtml: siteShell(path, bodyHtml),
     jsonLd,
     breadcrumbLd,
     article,
@@ -682,7 +739,7 @@ function homeBody() {
 
 writePage(
   "",
-  `${SITE}｜ロト6・ロト7・ミニロト｜高額当選を狙おう！`,
+  "LOTOアナリティクス～ロト6・ロト7・ミニロトの過去データ分析サイト～ 結果一覧・頻出数字傾向を徹底分析！",
   "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！",
   homeBody(),
 );

@@ -75,6 +75,8 @@ function ticketGrade(
   if (hit === mainCount) return [1, hit, bonusHit];
   if (hit === mainCount - 1 && bonusHit) return [2, hit, true];
   if (hit === mainCount - 1) return [3, hit, false];
+  // ロト7の6等は本数字3個にボーナス数字1個以上の一致が要る
+  if (hit === 3 && mainCount === 7 && !bonusHit) return [null, hit, bonusHit];
   if (hit >= 3) return [mainCount - hit + 2, hit, bonusHit];
   return [null, hit, bonusHit];
 }

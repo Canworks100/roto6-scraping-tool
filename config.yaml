@@ -59,10 +59,11 @@ games:
     prize_grades: 5
     unit_price: 200
     simu_grade1_base: 200000000
+    # シミュレーターの2等以下の1口あたり金額（直近100回の中央値を丸めた値。2026-10時点）
     simu_prizes:
-      2: 10000000
-      3: 300000
-      4: 6800
+      2: 11000000
+      3: 335000
+      4: 7100
       5: 1000
     current_page: "/takarakuji/check/loto/loto6/index.html"
     summary_csv: "/retail/takarakuji/loto/loto6/csv/loto6.csv"
@@ -80,11 +81,12 @@ games:
     prize_grades: 6
     unit_price: 300
     simu_grade1_base: 400000000
+    # シミュレーターの2等以下の1口あたり金額（直近100回の中央値を丸めた値。2026-10時点）
     simu_prizes:
-      2: 10000000
-      3: 1000000
-      4: 50000
-      5: 7000
+      2: 7000000
+      3: 570000
+      4: 6900
+      5: 1400
       6: 1000
     current_page: "/takarakuji/check/loto/loto7/index.html"
     summary_csv: "/retail/takarakuji/loto/loto7/csv/loto7.csv"
@@ -103,9 +105,10 @@ games:
     prize_grades: 4
     unit_price: 200
     simu_grade1_base: 30000000
+    # シミュレーターの2等以下の1口あたり金額（直近100回の中央値を丸めた値。2026-10時点）
     simu_prizes:
-      2: 200000
-      3: 6800
+      2: 150000
+      3: 10500
       4: 1000
     current_page: "/takarakuji/check/loto/miniloto/index.html"
     summary_csv: "/retail/takarakuji/loto/miniloto/csv/miniloto.csv"

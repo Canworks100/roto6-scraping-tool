@@ -767,6 +767,9 @@ def ticket_grade(
         return 2, hit, True
     if hit == main_count - 1:
         return 3, hit, False
+    # ロト7の6等は本数字3個にボーナス数字1個以上の一致が要る
+    if hit == 3 and main_count == 7 and not bonus_hit:
+        return None, hit, bonus_hit
     if hit >= 3:
         return (main_count - hit) + 2, hit, bonus_hit
     return None, hit, bonus_hit

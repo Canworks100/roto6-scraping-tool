@@ -1,5 +1,5 @@
 import { simuTitle } from "./simu";
-const SITE = "LOTO アナリティクス";
+const SITE = "LOTOアナリティクス";
 
 const LABELS: Record<string, string> = {
   loto6: "ロト6",
@@ -15,7 +15,7 @@ const HOME_DESC =
   "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！";
 
 /** トップの title 用（description に合わせた短い一句） */
-const HOME_TITLE_SUFFIX = "ロト6・ロト7・ミニロト｜高額当選を狙おう！";
+const HOME_TITLE = "LOTOアナリティクス～ロト6・ロト7・ミニロトの過去データ分析サイト～ 結果一覧・頻出数字傾向を徹底分析！";
 
 const LEGAL_DESC: Record<string, string> = {
   about:
@@ -265,11 +265,11 @@ export type SeoOpts = {
 
 export function setSeo(path: string, opts?: SeoOpts) {
   const parts = path.replace(/^\//, "").split("/").filter(Boolean);
-  let title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
+  let title = HOME_TITLE;
   let description = HOME_DESC;
 
   if (parts.length === 0) {
-    title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
+    title = HOME_TITLE;
     description = HOME_DESC;
   } else if (parts[0] === "about") {
     title = `このサイトについて｜${SITE}`;

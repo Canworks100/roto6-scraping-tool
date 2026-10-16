@@ -541,7 +541,7 @@ function shell(inner: string, activeGame?: string, activeView?: string): string 
 function renderNotFound(message = "お探しのページは見つかりませんでした。") {
   setSeo(location.pathname, {
     noindex: true,
-    title: "ページが見つかりません｜LOTO アナリティクス",
+    title: "ページが見つかりません｜LOTOアナリティクス",
     description:
       "お探しのページは見つかりませんでした。トップからロト6・ロト7・ミニロトの各ページへお進みください。",
   });
