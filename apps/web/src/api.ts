@@ -318,6 +318,12 @@ export type FlashArticle = {
   item: DrawItem;
   prev_draw_no: number | null;
   next_draw_no: number | null;
+  /** 検索に出す期限（次回抽せん日の終わり、ISO 8601） */
+  unavailable_after?: string;
+  /** 公開日時（最初に載せた時刻、日本時間の ISO 8601） */
+  published_at?: string | null;
+  /** 最終更新日時（日本時間の ISO 8601） */
+  updated_at?: string | null;
 };
 
 export function articles(game: string, limit = 20, offset = 0) {

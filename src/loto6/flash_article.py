@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from loto6.games import next_draw_date
 from loto6.storage import Store, row_to_draw
 
 
@@ -101,6 +102,32 @@ def article_or_build(store: Store, game_def: dict[str, Any], draw_no: int) -> di
     return article
 
 
+def _to_jst(iso: str | None) -> str | None:
+    if not iso:
+        return None
+    try:
+        parsed = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+
+
+def article_times(store: Store, game: str, draw_no: int) -> dict[str, str | None]:
+    """記事の公開日時（最初に保存した時刻）と最終更新日時。日本時間の ISO 8601。"""
+    published, updated = store.flash_article_times(game, draw_no)
+    return {"published_at": _to_jst(published), "updated_at": _to_jst(updated)}
+
+
+def unavailable_after(store: Store, game: str, draw_no: int, draw_date: str) -> str:
+    """検索に出す期限。次回抽せん日の終わり（JST）。次回が未収集なら通常の曜日から求める。"""
+    _, next_no = store.neighbor_draw_nos(game, draw_no)
+    next_row = None if next_no is None else store.get_draw(game, next_no)
+    next_date = str(next_row["draw_date"])[:10] if next_row is not None else next_draw_date(game, draw_date)
+    return f"{next_date}T23:59:59+09:00"
+
+
 def list_articles(store: Store, game_def: dict[str, Any], limit: int, offset: int) -> dict[str, Any]:
     game = str(game_def["id"])
     total = store.count_draws(game)
@@ -163,7 +190,8 @@ def build_article(
     prize1 = prizes.get(1, {})
     p1_count = prize1.get("count")
     p1_amount = prize1.get("amount")
-    carry = item.get("carryover_amount")
+    # ミニロトにはキャリーオーバーが無い
+    carry = None if game == "miniloto" else item.get("carryover_amount")
     stage = str(item.get("result_stage") or "official")
     has_amounts = any(prize.get("amount") is not None for prize in prizes.values())
     numbers_text = "・".join(f"{n:02d}" for n in numbers)

@@ -12,7 +12,7 @@ const dist = distEnv
   : join(root, "dist");
 const repo = join(root, "..", "..");
 const origin = (process.env.SITE_ORIGIN || process.env.VITE_SITE_ORIGIN || "").replace(/\/+$/, "");
-const SITE = "LOTO アナリティクス";
+const SITE = "LOTOアナリティクス";
 
 const GAMES = [
   { id: "loto6", label: "ロト6", max: 43 },
@@ -39,7 +39,7 @@ const VIEWS = [
     path: "/latest",
     title: (l) => `${l} 当選番号（最新結果）｜${SITE}`,
     desc: (l) =>
-      `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
+      `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。${l === "ミニロト" ? "回号と抽せん日もこのページで確認できます。" : "キャリーオーバーの有無もこのページで確認できます。"}`,
   },
   {
     view: "flash",
@@ -53,7 +53,7 @@ const VIEWS = [
     path: "/history",
     title: (l) => `${l} 当選番号一覧（過去結果）｜${SITE}`,
     desc: (l) =>
-      `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+      `${l}の過去の当選番号や当せん金額を、${l === "ミニロト" ? "当せん口数" : "キャリーオーバー"}も含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   },
   {
     view: "analyze",
@@ -245,7 +245,10 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     out = out.replace("</title>", `</title>\n    <link rel="canonical" href="${canon}" />`);
   }
   const ogType = article?.ogType || "website";
-  const imageAbs = "https://lottery-analytics.com/og-image.png?v=2";
+  // 記事ページは記事画像、それ以外はサイト共通の画像
+  const imageAbs = article?.image
+    ? `https://lottery-analytics.com${article.image}`
+    : "https://lottery-analytics.com/og-image.png?v=2";
   const imageAlt = "LOTO アナリティクス";
   const pub = article?.publishedTime || "";
   // index.html 既定の og/twitter 画像系を外し、ページ単位で入れ直す（重複防止）
@@ -262,25 +265,85 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${esc(imageAlt)}" />
     ${pub ? `<meta property="article:published_time" content="${esc(pub)}" />` : ""}
+    ${article?.modifiedTime ? `<meta property="article:modified_time" content="${esc(article.modifiedTime)}" />` : ""}
+    ${article?.unavailableAfter ? `<meta name="robots" content="index, follow, unavailable_after: ${esc(article.unavailableAfter)}" />` : ""}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="${esc(imageAbs)}" />
     <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(description)}" />`;
   out = out.replace("</head>", `${og}\n  </head>`);
+  // id は seo.ts の setJsonLd / setBreadcrumbJsonLd と揃える（JS 描画後に二重にしない）
   if (jsonLd) {
     out = out.replace(
       "</head>",
-      `    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`,
+      `    <script type="application/ld+json" id="jsonld-main">${JSON.stringify(jsonLd)}</script>\n  </head>`,
     );
   }
   if (breadcrumbLd) {
     out = out.replace(
       "</head>",
-      `    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}</script>\n  </head>`,
+      `    <script type="application/ld+json" id="jsonld-breadcrumb">${JSON.stringify(breadcrumbLd)}</script>\n  </head>`,
     );
   }
   out = out.replace(/<div id="app"><\/div>/, `<div id="app">${bodyHtml}</div>`);
   return out;
+}
+
+const SHELL_PAGES = [
+  ["latest", "最新結果"],
+  ["generate", "次回予想"],
+  ["history", "結果一覧"],
+  ["analyze", "分析"],
+  ["combo", "予想診断"],
+  ["simu", "シミュレーター"],
+];
+
+function shellNavHighlight(view) {
+  if (view === "flash") return "latest";
+  if (view === "ranks" || view === "search") return "history";
+  if (["freq", "pairs", "shape", "grid", "follow"].includes(view)) return "analyze";
+  return view;
+}
+
+/** main.ts の shell() と同じ外枠。JS の描画前に素の本文が全幅で大きく出るのを防ぐ */
+function siteShell(path, bodyHtml) {
+  const parts = path.replace(/^\//, "").split("/").filter(Boolean);
+  const onSimu = parts[0] === "simu";
+  const game = GAMES.some((g) => g.id === parts[0]) ? parts[0] : undefined;
+  const view = parts[1] === "n" ? "number" : parts[1] || "hub";
+  const gameLinks = GAMES.map((g) => {
+    const on = g.id === game;
+    const href = onSimu ? `/simu?game=${g.id}` : `/${g.id}`;
+    return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""}>${g.label}</a>`;
+  }).join("");
+  let pagesNav = "";
+  if (game || onSimu) {
+    const navGame = game || "loto6";
+    const highlight = onSimu ? "simu" : shellNavHighlight(view);
+    pagesNav = `<nav class="nav-pages" aria-label="ページ">${SHELL_PAGES.map(([id, label]) => {
+      const on = highlight === id;
+      const href = id === "simu" ? "/simu" : `/${navGame}/${id}`;
+      return `<a href="${href}" class="${on ? "active" : ""}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
+    }).join("")}</nav>`;
+  }
+  return `<header class="site-head">
+      <div class="topbar">
+        <a class="brand" href="/">LOTO <span>アナリティクス</span></a>
+        <nav class="nav-games" aria-label="ロト">${gameLinks}</nav>
+      </div>
+      ${pagesNav}
+    </header>
+    <main class="body">${bodyHtml}</main>
+    <footer class="footer">
+      <nav class="footer-nav">
+        <a href="/about">このサイトについて</a>
+        <a href="/disclaimer">免責事項</a>
+        <a href="/privacy">プライバシーポリシー</a>
+        <a href="/terms">利用規約</a>
+        <a href="/contact">お問い合わせ</a>
+      </nav>
+      <p class="copy">© 2026 LOTO アナリティクス</p>
+    </footer>`;
 }
 
 function writePage(path, title, description, bodyHtml, jsonLd, article, breadcrumbLd) {
@@ -290,7 +353,7 @@ function writePage(path, title, description, bodyHtml, jsonLd, article, breadcru
     title,
     description,
     canonical: loc(path || "/"),
-    bodyHtml,
+    bodyHtml: siteShell(path, bodyHtml),
     jsonLd,
     breadcrumbLd,
     article,
@@ -402,6 +465,7 @@ function chipNav(game, compact) {
         ["freq", "出現回数"],
         ["history", "結果一覧"],
         ["flash", "速報"],
+        ["simu", "シミュレーター"],
       ]
     : [
         ["latest", "最新結果"],
@@ -413,7 +477,7 @@ function chipNav(game, compact) {
       ];
   const links = pages
     .map(([id, t]) => {
-      const href = id === "simu" ? "/simu" : `/${game.id}/${id}`;
+      const href = id === "simu" ? `/simu?game=${game.id}` : `/${game.id}/${id}`;
       return `<a href="${href}">${t}</a>`;
     })
     .join("");
@@ -523,6 +587,92 @@ function gameBlockBody(game) {
   </article>`;
 }
 
+const ANALYSIS_VIEWS = new Set(["freq", "pairs", "shape", "grid", "follow"]);
+
+function numKey(obj, n) {
+  return obj?.[n] ?? obj?.[String(n)];
+}
+
+/** 出現回数の多い順（同数は数字の小さい順）に [数字, 回数] */
+function rankedCounts(game, gdata) {
+  const rows = [];
+  for (let n = 1; n <= game.max; n++) rows.push([n, Number(numKey(gdata.counts, n) ?? 0)]);
+  return rows.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+}
+
+function analysisBody(game, gdata, view) {
+  const st = gdata.stats;
+  const latestNo = gdata.latest?.draw_no ?? 0;
+  const numLink = (n) => `<a href="/${game.id}/n/${pad2(n)}">${pad2(n)}</a>`;
+  if (view === "freq") {
+    const rows = rankedCounts(game, gdata)
+      .map(([n, k], i) => {
+        const last = numKey(st.last_seen, n);
+        const gap = last ? latestNo - last : null;
+        return `<tr><td class="num">${i + 1}位</td><td class="num">${numLink(n)}</td><td class="num">${k}回</td><td class="num">${last ? `第${pad4(last)}回` : "—"}</td><td class="num">${gap == null ? "—" : `${gap}回`}</td></tr>`;
+      })
+      .join("");
+    return `<p>第1回から第${pad4(latestNo)}回まで（全${st.total}回）の本数字の出現回数です。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th class="num">数字</th><th class="num">出現回数</th><th class="num">最終出現</th><th class="num">空き</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "pairs") {
+    const rows = st.triples
+      .map(([t, k], i) => `<tr><td class="num">${i + 1}位</td><td>${t.map(pad2).join("・")}</td><td class="num">${k}回</td></tr>`)
+      .join("");
+    return `<p>全${st.total}回の本数字で、3個そろって出た回数の多い組み合わせ上位20組です。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th>組み合わせ</th><th class="num">回数</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "shape") {
+    const pct = (k) => `${((k / st.total) * 100).toFixed(1)}%`;
+    const main = gdata.latest?.numbers?.length ?? 6;
+    const oddRows = st.odd
+      .map(([odd, k]) => `<tr><td>奇数${odd}個・偶数${main - odd}個</td><td class="num">${k}回</td><td class="num">${pct(k)}</td></tr>`)
+      .join("");
+    const sumRows = st.sums
+      .map(([from, k]) => `<tr><td>${from}〜${from + 19}</td><td class="num">${k}回</td><td class="num">${pct(k)}</td></tr>`)
+      .join("");
+    return `<h3>奇数と偶数の分かれ方（全${st.total}回）</h3>
+      <table class="data"><thead><tr><th>分かれ方</th><th class="num">回数</th><th class="num">割合</th></tr></thead><tbody>${oddRows}</tbody></table>
+      <h3>本数字の合計</h3>
+      <table class="data"><thead><tr><th>合計</th><th class="num">回数</th><th class="num">割合</th></tr></thead><tbody>${sumRows}</tbody></table>`;
+  }
+  if (view === "grid") {
+    const rows = (gdata.history || [])
+      .slice(0, 20)
+      .map((r) => `<tr><td><a href="/${game.id}/flash/${r.draw_no}">第${pad4(r.draw_no)}回</a></td><td>${formatDateJa(r.draw_date)}</td><td>${r.numbers.map(pad2).join(" ")}</td></tr>`)
+      .join("");
+    return `<p>直近20回の本数字です。</p>
+      <table class="data"><thead><tr><th>回</th><th>抽せん日</th><th>本数字</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if (view === "follow") {
+    const rows = [];
+    for (let n = 1; n <= game.max; n++) rows.push([n, Number(numKey(st.follow, n) ?? 0)]);
+    const body = rows
+      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      .map(([n, k], i) => `<tr><td class="num">${i + 1}位</td><td class="num">${numLink(n)}</td><td class="num">${k}回</td></tr>`)
+      .join("");
+    return `<p>前回の本数字に入っていた数字が、次の回にも本数字で出た回数です（全${st.total}回）。</p>
+      <table class="data"><thead><tr><th class="num">順位</th><th class="num">数字</th><th class="num">続けて出た回数</th></tr></thead><tbody>${body}</tbody></table>`;
+  }
+  return "";
+}
+
+function numberBody(game, gdata, n) {
+  const st = gdata.stats;
+  const latestNo = gdata.latest?.draw_no ?? 0;
+  const rank = rankedCounts(game, gdata).findIndex(([m]) => m === n) + 1;
+  const last = numKey(st.last_seen, n);
+  const comps = (numKey(st.companions, n) || [])
+    .map(([m, k]) => `<li><a href="/${game.id}/n/${pad2(m)}">${pad2(m)}</a>（${k}回）</li>`)
+    .join("");
+  return `<ul>
+      <li>出現回数の順位: ${game.max}個中${rank}位（全${st.total}回）</li>
+      <li>最終出現: ${last ? `<a href="/${game.id}/flash/${last}">第${pad4(last)}回</a>（${latestNo - last}回前）` : "—"}</li>
+      <li>前回から続けて出た回数: ${Number(numKey(st.follow, n) ?? 0)}回</li>
+    </ul>
+    ${comps ? `<h3>${pad2(n)}と一緒に出やすい数字</h3><ol>${comps}</ol>` : ""}`;
+}
+
 function hubBody(game) {
   return `<section class="hub">${gameBlockBody(game)}</section>`;
 }
@@ -548,6 +698,19 @@ MAXN = {"loto6": 43, "loto7": 37, "miniloto": 31}
 c = sqlite3.connect(p)
 c.row_factory = sqlite3.Row
 out = {"games": {}}
+from datetime import datetime, timezone as tz
+JST = tz(timedelta(hours=9))
+def to_jst(iso):
+    if not iso:
+        return None
+    try:
+        d = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=tz.utc)
+    return d.astimezone(JST).isoformat(timespec="seconds")
+has_published = "published_at" in {r[1] for r in c.execute("PRAGMA table_info(flash_articles)")}
 for game in ("loto6", "loto7", "miniloto"):
     main = MAIN[game]
     cols = ",".join(f"n{i}" for i in range(1, main + 1))
@@ -587,12 +750,33 @@ for game in ("loto6", "loto7", "miniloto"):
         (game,),
     ).fetchall()
     flash_map = {int(r["draw_no"]): r["draw_date"] for r in flashes}
+    # 速報記事の公開日時（最初に載せた時刻）と最終更新日時を日本時間で
+    flash_times = {}
+    if has_published:
+        for r in c.execute(
+            "SELECT draw_no, published_at, generated_at FROM flash_articles WHERE game=?",
+            (game,),
+        ):
+            flash_times[int(r["draw_no"])] = [to_jst(r["published_at"]), to_jst(r["generated_at"])]
     # 直近50回のアイキャッチを dist/og へ
     dist = __import__("os").environ.get("PRERENDER_DIST")
     if dist:
         from pathlib import Path as P
-        from loto6.eyecatch import eyecatch_svg
+        from loto6.eyecatch import eyecatch_png, eyecatch_svg
+        # PNG は1枚0.1秒かかるので、回ごとに一度だけ作って使い回す（Pillow が無い環境では作らない）
+        png_cache = repo / "data" / "og-cache"
         for r in hist_rows:
+            label = {"loto6": "ロト6", "loto7": "ロト7", "miniloto": "ミニロト"}[game]
+            cached = png_cache / f'{game}-{r["draw_no"]}-{str(r["draw_date"])[:10]}-v1.png'
+            try:
+                if not cached.exists():
+                    png_cache.mkdir(parents=True, exist_ok=True)
+                    cached.write_bytes(eyecatch_png(label=label, draw_no=r["draw_no"], draw_date=r["draw_date"]))
+            except ImportError:
+                break
+            png = P(dist) / "og" / game / f'{r["draw_no"]}.png'
+            png.parent.mkdir(parents=True, exist_ok=True)
+            png.write_bytes(cached.read_bytes())
             og = P(dist) / "og" / game / f'{r["draw_no"]}.svg'
             og.parent.mkdir(parents=True, exist_ok=True)
             og.write_text(
@@ -607,9 +791,46 @@ for game in ("loto6", "loto7", "miniloto"):
                 encoding="utf-8",
             )
     counts = {i: 0 for i in range(1, MAXN[game] + 1)}
-    for r in c.execute(f"SELECT {cols} FROM draws WHERE game=?", (game,)):
-        for i in range(1, main + 1):
-            counts[int(r[f"n{i}"])] += 1
+    # 分析ページの静的HTML用（全期間・本数字）。JS 描画前でも中身が読めるようにする
+    from itertools import combinations
+    from collections import Counter
+    last_seen = {}
+    pair = Counter()
+    triple = Counter()
+    odd_dist = Counter()
+    sum_dist = Counter()
+    follow = Counter()
+    prev = set()
+    for r in c.execute(f"SELECT draw_no, {cols} FROM draws WHERE game=? ORDER BY draw_no", (game,)):
+        ns = sorted(int(r[f"n{i}"]) for i in range(1, main + 1))
+        for n in ns:
+            counts[n] += 1
+            last_seen[n] = int(r["draw_no"])
+            if n in prev:
+                follow[n] += 1
+        pair.update(combinations(ns, 2))
+        triple.update(combinations(ns, 3))
+        odd_dist[sum(n % 2 for n in ns)] += 1
+        sum_dist[sum(ns) // 20 * 20] += 1
+        prev = set(ns)
+    companions = {}
+    for n in range(1, MAXN[game] + 1):
+        with_n = Counter()
+        for (a, b), k in pair.items():
+            if a == n:
+                with_n[b] = k
+            elif b == n:
+                with_n[a] = k
+        companions[n] = [[m, k] for m, k in sorted(with_n.items(), key=lambda x: (-x[1], x[0]))[:5]]
+    stats = {
+        "last_seen": last_seen,
+        "companions": companions,
+        "triples": [[list(t), k] for t, k in sorted(triple.items(), key=lambda x: (-x[1], x[0]))[:20]],
+        "odd": sorted(odd_dist.items()),
+        "sums": sorted(sum_dist.items()),
+        "follow": follow,
+        "total": sum(odd_dist.values()),
+    }
     # 次回予想数字は頻度上位から決定的に選ぶ（ビルド用・クライアントと同値でなくてよい）
     top = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
     next_nums = sorted(n for n, _ in top[:main])
@@ -625,7 +846,9 @@ for game in ("loto6", "loto7", "miniloto"):
         "next_numbers": next_nums,
         "history": hist_rows,
         "flashes": flash_map,
+        "flash_times": flash_times,
         "counts": counts,
+        "stats": stats,
         "max": MAXN[game],
     }
 print(json.dumps(out, ensure_ascii=False))
@@ -669,27 +892,42 @@ function ballsHtml(numbers, bonus) {
 
 function homeBody() {
   const cards = GAMES.map((game) => homeCardBody(game)).join("");
-  const hubLinks = GAMES.map(
-    (game) => `<li><a href="/${game.id}">${game.label}のページへ</a></li>`,
-  ).join("");
   return `<section class="home-fv">
     <header class="hub-head">
       <h1 class="hub-title">LOTO アナリティクス</h1>
       <p class="hub-lead">ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！</p>
     </header>
     <div class="home-kpi">${cards}</div>
-  </section>
-  <section class="box home-dirs">
-    <h2>くじ種別</h2>
-    <div class="inner"><ul class="hub-link-list">${hubLinks}</ul></div>
   </section>`;
 }
 
 writePage(
   "",
-  `${SITE}｜ロト6・ロト7・ミニロト｜高額当選を狙おう！`,
+  "LOTOアナリティクス～ロト6・ロト7・ミニロトの過去データ分析サイト～ 結果一覧・頻出数字傾向を徹底分析！",
   "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！",
   homeBody(),
+  // seo.ts の siteJsonLd と同じ内容
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${loc("/")}#website`,
+        name: SITE,
+        alternateName: "LOTO アナリティクス",
+        url: loc("/"),
+        inLanguage: "ja",
+        publisher: { "@id": `${loc("/")}#organization` },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${loc("/")}#organization`,
+        name: SITE,
+        url: loc("/"),
+        logo: loc("/icon-512.png"),
+      },
+    ],
+  },
 );
 urls.push("/");
 lastmods["/"] =
@@ -728,7 +966,7 @@ for (const game of GAMES) {
             <div class="inner">
               <p class="muted">${nextNo != null ? `第${pad4(nextNo)}回` : "次回"}${nextDate ? `（抽せん日 ${formatDateJa(nextDate)}）` : ""}</p>
               <div class="flash-balls"><span class="balls"><span class="balls-main">${nextNums.map((n) => `<span class="ball">${pad2(n)}</span>`).join("")}</span></span></div>
-              <p><a href="/${game.id}/generate">口数で作成</a>　<a href="/${game.id}/generate">次回予想ページ</a></p>
+              <p><a href="/${game.id}/generate">次回予想ページ</a></p>
             </div></div>`
         : `<div class="box"><h2>${game.label}｜次回予想</h2>
             <div class="inner"><p><a href="/${game.id}/generate">次回予想ページ</a></p></div></div>`;
@@ -793,6 +1031,12 @@ for (const game of GAMES) {
           <li class="analyze-item"><a href="/${game.id}/grid">出目表</a><p class="muted">直近の本数字を表で縦に並べて追えます。</p></li>
           <li class="analyze-item"><a href="/${game.id}/follow">前回を含む回数</a><p class="muted">前回と同じ数字がまた出た回数を数字ごとに見られます。</p></li>
         </ul></div>`;
+    } else if (ANALYSIS_VIEWS.has(view.view) && gdata.stats) {
+      const h1 = view.title(game.label).split("｜")[0];
+      body = `<div class="box"><h1>${h1}</h1><p class="howto">${esc(view.desc(game.label))}</p>
+        <div class="inner">${analysisBody(game, gdata, view.view)}
+        <p><a href="/${game.id}/analyze">分析</a>　<a href="/${game.id}/history">結果一覧</a></p></div></div>`;
+      lastmods[path] = latest?.draw_date;
     } else {
       const h1 = view.title(game.label).split("｜")[0];
       body = `<div class="box"><h1>${h1}</h1><p>${esc(view.desc(game.label))}</p>
@@ -817,8 +1061,9 @@ for (const game of GAMES) {
     const path = `/${game.id}/n/${nn}`;
     const count = gdata.counts?.[n] ?? gdata.counts?.[String(n)] ?? 0;
     const body = `<div class="box"><h1>${game.label} ${nn} の出現回数</h1>
-      <p>本数字としての出現回数: ${count}回</p>
-      <p><a href="/${game.id}/freq">出現回数一覧</a></p></div>`;
+      <div class="inner"><p>本数字としての出現回数: ${count}回</p>
+      ${gdata.stats ? numberBody(game, gdata, n) : ""}
+      <p><a href="/${game.id}/freq">出現回数一覧</a></p></div></div>`;
     const wrapped = withCrumb(game, "number", body, { number: n });
     writePage(
       path.slice(1),
@@ -862,15 +1107,21 @@ for (const game of GAMES) {
   const flashMap = gdata.flashes || {};
   const maxNo = latest?.draw_no || 0;
   const richStart = Math.max(1, maxNo - 49);
-  for (const [noStr, drawDate] of Object.entries(flashMap)) {
-    const n = Number(noStr);
+  const flashEntries = Object.entries(flashMap)
+    .map(([noStr, drawDate]) => [Number(noStr), drawDate])
+    .sort((a, b) => a[0] - b[0]);
+  for (const [i, [n, drawDate]] of flashEntries.entries()) {
     const path = `/${game.id}/flash/${n}`;
     const padded = pad4(n);
+    // 検索に出すのは次回抽せん日の終わりまで（次回が未収集なら予定日）
+    const nextDate = flashEntries[i + 1]?.[1] ?? gdata.next_draw_date;
+    const unavailableAfter = nextDate ? `${String(nextDate).slice(0, 10)}T23:59:59+09:00` : undefined;
     const dateJa = formatDateJa(drawDate);
     const headline = flashNewsHeadline(game.label, n, drawDate);
     const histHit = gdata.history?.find((h) => h.draw_no === n);
-    const eye = `/og/${game.id}/${n}.svg?v=2`;
-    const pub = `${String(drawDate).slice(0, 10)}T12:00:00+09:00`;
+    const eye = `/og/${game.id}/${n}.png?v=1`;
+    // 実際に載せた時刻。記録が無い回（記事未生成）は日時を出さない
+    const [pub, modified] = gdata.flash_times?.[n] || [];
     let body = `<article class="post"><p class="flash-kicker">速報</p>`;
     if (n >= richStart) {
       body += `<figure class="post-eyecatch"><img src="${eye}" alt="${esc(headline)}" width="1200" height="630" /></figure>`;
@@ -886,8 +1137,10 @@ for (const game of GAMES) {
         body += `<ul>${prizeValues
           .map((v, i) => `<li>${i + 1}等 ${v == null ? "—" : `${Number(v).toLocaleString("ja-JP")}円`}</li>`)
           .join("")}</ul>`;
-        const carry = histHit.carryover_amount;
-        body += `<p>キャリーオーバー ${carry == null ? "—" : `${Number(carry).toLocaleString("ja-JP")}円`}</p>`;
+        if (game.id !== "miniloto") {
+          const carry = histHit.carryover_amount;
+          body += `<p>キャリーオーバー ${carry == null ? "—" : `${Number(carry).toLocaleString("ja-JP")}円`}</p>`;
+        }
       } else if (histHit.result_stage && histHit.result_stage !== "official") {
         body += `<p>速報（当せん金額は確定後に追記）</p>`;
       }
@@ -898,8 +1151,7 @@ for (const game of GAMES) {
             "@type": "NewsArticle",
             headline,
             description: `${headline}。本数字と当せん金額を掲載。`,
-            datePublished: pub,
-            dateModified: pub,
+            ...(pub ? { datePublished: pub, dateModified: modified || pub } : {}),
             mainEntityOfPage: loc(path),
             url: loc(path),
             image: [loc(eye)],
@@ -907,7 +1159,7 @@ for (const game of GAMES) {
             publisher: {
               "@type": "Organization",
               name: SITE,
-              logo: { "@type": "ImageObject", url: loc("/favicon.svg") },
+              logo: { "@type": "ImageObject", url: loc("/icon-512.png") },
             },
             articleSection: "宝くじ",
             inLanguage: "ja",
@@ -933,7 +1185,7 @@ for (const game of GAMES) {
     body += `<p><a href="/${game.id}/flash">速報一覧</a>　<a href="/${game.id}/latest">最新結果</a></p></article>`;
     const md = formatMonthDay(drawDate);
     const desc = md
-      ? `第${padded}回${game.label}の当選番号速報。${md}の抽選結果と当せん金額、キャリーオーバーを掲載。`
+      ? `第${padded}回${game.label}の当選番号速報。${md}の抽選結果と当せん金額${game.label === "ミニロト" ? "" : "、キャリーオーバー"}を掲載。`
       : `第${padded}回${game.label}の当選番号速報。抽選結果と当せん金額を掲載。`;
     const wrapped = withCrumb(game, "flash", body, { drawNo: n });
     writePage(
@@ -943,12 +1195,11 @@ for (const game of GAMES) {
       wrapped.body,
       jsonLd,
       n >= richStart
-        ? { ogType: "article", image: eye, publishedTime: pub }
-        : { ogType: "article", publishedTime: pub },
+        ? { ogType: "article", image: eye, publishedTime: pub, modifiedTime: modified, unavailableAfter }
+        : { ogType: "article", publishedTime: pub, modifiedTime: modified, unavailableAfter },
       wrapped.breadcrumbLd,
     );
-    urls.push(path);
-    if (n >= richStart) lastmods[path] = drawDate;
+    // 速報記事は sitemap.xml に載せない（発見は news-sitemap.xml の直近分に任せる）
   }
 }
 
@@ -973,18 +1224,19 @@ writeFileSync(
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`,
 );
 
-// Google News: 直近2日分の速報
+// Google News: 直近2日に公開した速報（公開日時は実際に載せた時刻）
 const newsCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
 const newsUrls = [];
 for (const game of GAMES) {
-  const flashMap = db.games?.[game.id]?.flashes || {};
+  const gdata = db.games?.[game.id] || {};
+  const flashMap = gdata.flashes || {};
   for (const [noStr, drawDate] of Object.entries(flashMap)) {
-    const t = Date.parse(String(drawDate).slice(0, 10));
-    if (!Number.isFinite(t) || t < newsCutoff) continue;
     const n = Number(noStr);
+    const pub = gdata.flash_times?.[n]?.[0];
+    const t = pub ? Date.parse(pub) : NaN;
+    if (!Number.isFinite(t) || t < newsCutoff) continue;
     const path = `/${game.id}/flash/${n}`;
     const headline = flashNewsHeadline(game.label, n, drawDate);
-    const pub = String(drawDate).slice(0, 10);
     newsUrls.push({ path, headline, pub });
   }
 }

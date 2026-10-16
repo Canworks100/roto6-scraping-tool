@@ -1080,6 +1080,19 @@ table.data td.nums {
   font-size: clamp(14px, 3.5vw, 17px);
 }
 
+/* 本数字は枠に収まるよう縮める（ロト7の7球が狭い画面ではみ出さないように） */
+.home-card-balls .balls-main {
+  width: 100%;
+}
+
+.home-card-balls .balls-main .ball {
+  flex: 0 1 clamp(36px, 9vw, 44px);
+  width: auto;
+  height: auto;
+  min-width: 0;
+  aspect-ratio: 1;
+}
+
 .home-card-more {
   margin: 0;
   text-align: center;
@@ -1141,6 +1154,44 @@ table.data td.nums {
 
 .home-dirs > h2 {
   margin: 0;
+}
+
+/* 2カラムはロト7の7球が1行に収まる幅から */
+@media (min-width: 960px) {
+  .home-kpi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+  }
+
+  .home-dirs {
+    max-width: none;
+  }
+
+  .home-card-balls .balls-main {
+    gap: 6px;
+  }
+
+  .home-card-balls .ball,
+  .home-card-balls .bonus {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .home-card-balls .balls-main .ball {
+    flex-basis: 40px;
+    width: auto;
+    height: auto;
+  }
+
+  .home-card-more-nav .chip-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-card-more-nav .chip-nav a {
+    text-align: center;
+  }
 }
 
 .home-dir-row {
@@ -1751,8 +1802,15 @@ table.data td.nums {
 
 .aff-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+/* 4冊を2列×2段でそろえる */
+@media (min-width: 600px) {
+  .aff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .aff-card {
@@ -2199,6 +2257,15 @@ table.data tbody tr.hot {
     min-width: 6em;
     padding: 18px 14px;
     font-size: 13px;
+  }
+
+  /* 中央揃え（幅が足りないときは左端から横スクロール） */
+  .nav-pages a:first-child {
+    margin-left: auto;
+  }
+
+  .nav-pages a:last-child {
+    margin-right: auto;
   }
 
   .body {

@@ -1,5 +1,5 @@
 import { simuTitle } from "./simu";
-const SITE = "LOTO アナリティクス";
+const SITE = "LOTOアナリティクス";
 
 const LABELS: Record<string, string> = {
   loto6: "ロト6",
@@ -15,7 +15,7 @@ const HOME_DESC =
   "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！";
 
 /** トップの title 用（description に合わせた短い一句） */
-const HOME_TITLE_SUFFIX = "ロト6・ロト7・ミニロト｜高額当選を狙おう！";
+const HOME_TITLE = "LOTOアナリティクス～ロト6・ロト7・ミニロトの過去データ分析サイト～ 結果一覧・頻出数字傾向を徹底分析！";
 
 const LEGAL_DESC: Record<string, string> = {
   about:
@@ -74,11 +74,11 @@ const GAME_DESC: Record<GameDescKey, (label: string) => string> = {
   analyze: (l) =>
     `${l}の出現回数や組み合わせなど、傾向を見る分析ページへの入口です。`,
   latest: (l) =>
-    `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。キャリーオーバーの有無もこのページで確認できます。`,
+    `${l}の最新当選番号と当せん金額、次回予想をまとめて表示。${l === "ミニロト" ? "回号と抽せん日もこのページで確認できます。" : "キャリーオーバーの有無もこのページで確認できます。"}`,
   flash: (l) =>
     `${l}の当選番号と当せん金額を回号ごとに掲載。前後の回へそのまま移れるので、さかのぼりやすい構成です。`,
   history: (l) =>
-    `${l}の過去の当選番号や当せん金額を、キャリーオーバーも含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
+    `${l}の過去の当選番号や当せん金額を、${l === "ミニロト" ? "当せん口数" : "キャリーオーバー"}も含めて新しい回から順に一覧。気になる回を、さかのぼって探せます。`,
   search: (l) =>
     `${l}で気になる数字を選ぶと、本数字に出た回が一覧に。お気に入りがいつ出たか、すぐ追えます。`,
   combo: (l) =>
@@ -122,7 +122,7 @@ function gameDesc(label: string, key: GameDescKey): string {
 function flashDrawDesc(label: string, padded: string, dateIso?: string): string {
   const md = formatMonthDay(dateIso || "");
   if (md) {
-    return `第${padded}回${label}の当選番号速報。${md}の抽選結果と当せん金額、キャリーオーバーを掲載。`;
+    return `第${padded}回${label}の当選番号速報。${md}の抽選結果と当せん金額${label === "ミニロト" ? "" : "、キャリーオーバー"}を掲載。`;
   }
   return `第${padded}回${label}の当選番号速報。抽選結果と当せん金額を掲載。`;
 }
@@ -153,14 +153,14 @@ export function flashNewsHeadline(label: string, drawNo: number, dateIso?: strin
 }
 
 /** アイキャッチ差し替え時に上げる（ブラウザキャッシュ避け） */
-const EYECATCH_VER = "3";
+const EYECATCH_VER = "4";
 
 export function eyecatchPath(game: string, drawNo: number): string {
-  return `/og/${game}/${drawNo}.svg?v=${EYECATCH_VER}`;
+  return `/og/${game}/${drawNo}.png?v=${EYECATCH_VER}`;
 }
 
 export function eyecatchApiPath(game: string, drawNo: number): string {
-  return `/api/${game}/articles/${drawNo}/eyecatch.svg?v=${EYECATCH_VER}`;
+  return `/api/${game}/articles/${drawNo}/eyecatch.png?v=${EYECATCH_VER}`;
 }
 
 /** ビルド時 VITE_SITE_ORIGIN。未設定時はブラウザの origin。 */
@@ -195,6 +195,32 @@ function setRobots(content: string | null) {
   const el = ensureMeta("name", "robots");
   if (content) el.setAttribute("content", content);
   else el.remove();
+}
+
+/** トップのサイト情報（検索結果のサイト名表示に使われる） */
+export function siteJsonLd(): Record<string, unknown> {
+  const home = absoluteUrl("/");
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${home}#website`,
+        name: SITE,
+        alternateName: "LOTO アナリティクス",
+        url: home,
+        inLanguage: "ja",
+        publisher: { "@id": `${home}#organization` },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${home}#organization`,
+        name: SITE,
+        url: home,
+        logo: absoluteUrl("/icon-512.png"),
+      },
+    ],
+  };
 }
 
 export function setJsonLd(data: Record<string, unknown> | null) {
@@ -253,9 +279,12 @@ export function setBreadcrumbJsonLd(items: BreadcrumbItem[] | null) {
 export type SeoOpts = {
   drawDate?: string;
   noindex?: boolean;
+  /** 速報記事など、この日時を過ぎたら検索から外す（ISO 8601） */
+  unavailableAfter?: string;
   ogType?: "website" | "article";
   image?: string;
   publishedTime?: string;
+  modifiedTime?: string;
   /** 指定時はパス解決より優先（404 など） */
   title?: string;
   description?: string;
@@ -263,11 +292,11 @@ export type SeoOpts = {
 
 export function setSeo(path: string, opts?: SeoOpts) {
   const parts = path.replace(/^\//, "").split("/").filter(Boolean);
-  let title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
+  let title = HOME_TITLE;
   let description = HOME_DESC;
 
   if (parts.length === 0) {
-    title = `${SITE}｜${HOME_TITLE_SUFFIX}`;
+    title = HOME_TITLE;
     description = HOME_DESC;
   } else if (parts[0] === "about") {
     title = `このサイトについて｜${SITE}`;
@@ -372,8 +401,8 @@ export function setSeo(path: string, opts?: SeoOpts) {
   const abs = absoluteUrl(cleanPath);
   const params = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
   const hasIndexQuery = params.has("period") || params.has("rows") || params.has("page");
-  const robots =
-    opts?.noindex || hasIndexQuery ? "noindex, follow" : "index, follow";
+  let robots = opts?.noindex || hasIndexQuery ? "noindex, follow" : "index, follow";
+  if (opts?.unavailableAfter) robots += `, unavailable_after: ${opts.unavailableAfter}`;
 
   document.title = title;
   ensureMeta("name", "description").setAttribute("content", description);
@@ -399,8 +428,12 @@ export function setSeo(path: string, opts?: SeoOpts) {
   ensureMeta("property", "og:image:width").setAttribute("content", "1200");
   ensureMeta("property", "og:image:height").setAttribute("content", "630");
   ensureMeta("property", "og:image:alt").setAttribute("content", imageAlt);
-  if (opts?.publishedTime) {
-    ensureMeta("property", "article:published_time").setAttribute("content", opts.publishedTime);
+  for (const [prop, value] of [
+    ["article:published_time", opts?.publishedTime],
+    ["article:modified_time", opts?.modifiedTime],
+  ] as const) {
+    if (value) ensureMeta("property", prop).setAttribute("content", value);
+    else document.head.querySelector(`meta[property="${prop}"]`)?.remove();
   }
   ensureMeta("name", "twitter:card").setAttribute("content", "summary_large_image");
   ensureMeta("name", "twitter:image").setAttribute("content", imageAbs);
@@ -442,12 +475,12 @@ export function flashNewsJsonLd(opts: {
   url: string;
   image: string;
   description: string;
+  /** 公開日時・最終更新日時（実際に載せた時刻） */
+  publishedAt?: string | null;
+  updatedAt?: string | null;
 }): Record<string, unknown> {
   const headline = flashNewsHeadline(opts.label, opts.drawNo, opts.drawDate);
   const imageAbs = absoluteUrl(opts.image);
-  const datePub = /^\d{4}-\d{2}-\d{2}/.test(opts.drawDate)
-    ? `${opts.drawDate.slice(0, 10)}T12:00:00+09:00`
-    : opts.drawDate;
   const list = drawResultJsonLd({
     label: opts.label,
     drawNo: opts.drawNo,
@@ -463,8 +496,8 @@ export function flashNewsJsonLd(opts: {
         "@type": "NewsArticle",
         headline,
         description: opts.description,
-        datePublished: datePub,
-        dateModified: datePub,
+        ...(opts.publishedAt ? { datePublished: opts.publishedAt } : {}),
+        ...(opts.updatedAt || opts.publishedAt ? { dateModified: opts.updatedAt || opts.publishedAt } : {}),
         mainEntityOfPage: opts.url,
         url: opts.url,
         image: [imageAbs],
@@ -472,7 +505,7 @@ export function flashNewsJsonLd(opts: {
         publisher: {
           "@type": "Organization",
           name: SITE,
-          logo: { "@type": "ImageObject", url: absoluteUrl("/favicon.svg") },
+          logo: { "@type": "ImageObject", url: absoluteUrl("/icon-512.png") },
         },
         articleSection: "宝くじ",
         inLanguage: "ja",

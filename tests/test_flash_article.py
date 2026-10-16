@@ -1,7 +1,14 @@
 import unittest
 from pathlib import Path
 
-from loto6.flash_article import build_article, ensure_missing_articles, list_articles, refresh_articles
+from loto6.flash_article import (
+    article_times,
+    build_article,
+    ensure_missing_articles,
+    list_articles,
+    refresh_articles,
+    unavailable_after,
+)
 from loto6.parser import Draw
 from loto6.storage import Store
 
@@ -88,6 +95,36 @@ class FlashArticleTest(unittest.TestCase):
         assert row2 is not None
         self.assertEqual(row2["title"], row["title"])
         self.assertGreaterEqual(row2["generated_at"], old_at)
+
+    def test_published_at_kept_on_refresh(self) -> None:
+        refresh_articles(self.store, GAME, [2])
+        self.store.conn.execute(
+            "UPDATE flash_articles SET published_at=?, generated_at=? WHERE game='loto6' AND draw_no=2",
+            ("2026-01-08T10:00:00+00:00", "2026-01-08T10:00:00+00:00"),
+        )
+        refresh_articles(self.store, GAME, [2])
+        times = article_times(self.store, "loto6", 2)
+        # 作り直しても公開日時は最初のまま、更新日時だけ進む
+        self.assertEqual(times["published_at"], "2026-01-08T19:00:00+09:00")
+        self.assertNotEqual(times["updated_at"], times["published_at"])
+
+    def test_set_published_at_only_moves_earlier(self) -> None:
+        refresh_articles(self.store, GAME, [2])
+        self.store.conn.execute(
+            "UPDATE flash_articles SET published_at=? WHERE game='loto6' AND draw_no=2",
+            ("2026-01-08T13:00:00+00:00",),
+        )
+        self.assertFalse(self.store.set_flash_published_at("loto6", 2, "2026-01-08T14:00:00+00:00"))
+        self.assertTrue(self.store.set_flash_published_at("loto6", 2, "2026-01-08T11:16:00+00:00"))
+        self.assertEqual(article_times(self.store, "loto6", 2)["published_at"], "2026-01-08T20:16:00+09:00")
+
+    def test_no_times_without_article(self) -> None:
+        self.assertEqual(article_times(self.store, "loto6", 3), {"published_at": None, "updated_at": None})
+
+    def test_unavailable_after_is_end_of_next_draw_day(self) -> None:
+        self.assertEqual(unavailable_after(self.store, "loto6", 2, "2026-01-08"), "2026-01-12T23:59:59+09:00")
+        # 次回が未収集なら通常の抽せん曜日（月・木）から求める
+        self.assertEqual(unavailable_after(self.store, "loto6", 3, "2026-01-12"), "2026-01-15T23:59:59+09:00")
 
     def test_unknown_draw(self) -> None:
         self.assertIsNone(build_article(self.store, GAME, 99))
