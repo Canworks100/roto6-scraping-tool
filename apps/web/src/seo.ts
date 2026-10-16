@@ -153,14 +153,14 @@ export function flashNewsHeadline(label: string, drawNo: number, dateIso?: strin
 }
 
 /** アイキャッチ差し替え時に上げる（ブラウザキャッシュ避け） */
-const EYECATCH_VER = "3";
+const EYECATCH_VER = "4";
 
 export function eyecatchPath(game: string, drawNo: number): string {
-  return `/og/${game}/${drawNo}.svg?v=${EYECATCH_VER}`;
+  return `/og/${game}/${drawNo}.png?v=${EYECATCH_VER}`;
 }
 
 export function eyecatchApiPath(game: string, drawNo: number): string {
-  return `/api/${game}/articles/${drawNo}/eyecatch.svg?v=${EYECATCH_VER}`;
+  return `/api/${game}/articles/${drawNo}/eyecatch.png?v=${EYECATCH_VER}`;
 }
 
 /** ビルド時 VITE_SITE_ORIGIN。未設定時はブラウザの origin。 */
@@ -195,6 +195,32 @@ function setRobots(content: string | null) {
   const el = ensureMeta("name", "robots");
   if (content) el.setAttribute("content", content);
   else el.remove();
+}
+
+/** トップのサイト情報（検索結果のサイト名表示に使われる） */
+export function siteJsonLd(): Record<string, unknown> {
+  const home = absoluteUrl("/");
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${home}#website`,
+        name: SITE,
+        alternateName: "LOTO アナリティクス",
+        url: home,
+        inLanguage: "ja",
+        publisher: { "@id": `${home}#organization` },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${home}#organization`,
+        name: SITE,
+        url: home,
+        logo: absoluteUrl("/icon-512.png"),
+      },
+    ],
+  };
 }
 
 export function setJsonLd(data: Record<string, unknown> | null) {
@@ -479,7 +505,7 @@ export function flashNewsJsonLd(opts: {
         publisher: {
           "@type": "Organization",
           name: SITE,
-          logo: { "@type": "ImageObject", url: absoluteUrl("/favicon.svg") },
+          logo: { "@type": "ImageObject", url: absoluteUrl("/icon-512.png") },
         },
         articleSection: "宝くじ",
         inLanguage: "ja",

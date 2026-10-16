@@ -29,7 +29,7 @@ from loto6.analyze import (  # noqa: E402
     years_ago,
 )
 from loto6.config import abs_path, load_config  # noqa: E402
-from loto6.eyecatch import eyecatch_svg  # noqa: E402
+from loto6.eyecatch import eyecatch_png, eyecatch_svg  # noqa: E402
 from loto6.flash_article import article_or_build, article_times, list_articles, unavailable_after  # noqa: E402
 from loto6.games import get_game, next_draw_date, public_game_list  # noqa: E402
 from loto6.generate import generate_combos  # noqa: E402
@@ -500,6 +500,26 @@ def article_eyecatch(
     return Response(
         content=svg,
         media_type="image/svg+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600, must-revalidate"},
+    )
+
+
+@app.get("/api/{game}/articles/{draw_no}/eyecatch.png")
+def article_eyecatch_png(
+    game: str,
+    draw_no: int,
+    store: Annotated[Store, Depends(get_store)],
+) -> Response:
+    g = parse_game(game)
+    if draw_no < 1:
+        raise HTTPException(status_code=404, detail="記事がありません")
+    row = store.get_draw(game, draw_no)
+    if row is None:
+        raise HTTPException(status_code=404, detail="記事がありません")
+    png = eyecatch_png(label=str(g["label"]), draw_no=draw_no, draw_date=str(row["draw_date"] or ""))
+    return Response(
+        content=png,
+        media_type="image/png",
         headers={"Cache-Control": "public, max-age=3600, must-revalidate"},
     )
 

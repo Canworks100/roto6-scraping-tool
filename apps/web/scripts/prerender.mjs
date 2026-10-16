@@ -245,7 +245,10 @@ function injectMeta(html, { title, description, canonical, bodyHtml, jsonLd, bre
     out = out.replace("</title>", `</title>\n    <link rel="canonical" href="${canon}" />`);
   }
   const ogType = article?.ogType || "website";
-  const imageAbs = "https://lottery-analytics.com/og-image.png?v=2";
+  // 記事ページは記事画像、それ以外はサイト共通の画像
+  const imageAbs = article?.image
+    ? `https://lottery-analytics.com${article.image}`
+    : "https://lottery-analytics.com/og-image.png?v=2";
   const imageAlt = "LOTO アナリティクス";
   const pub = article?.publishedTime || "";
   // index.html 既定の og/twitter 画像系を外し、ページ単位で入れ直す（重複防止）
@@ -673,8 +676,21 @@ for game in ("loto6", "loto7", "miniloto"):
     dist = __import__("os").environ.get("PRERENDER_DIST")
     if dist:
         from pathlib import Path as P
-        from loto6.eyecatch import eyecatch_svg
+        from loto6.eyecatch import eyecatch_png, eyecatch_svg
+        # PNG は1枚0.1秒かかるので、回ごとに一度だけ作って使い回す（Pillow が無い環境では作らない）
+        png_cache = repo / "data" / "og-cache"
         for r in hist_rows:
+            label = {"loto6": "ロト6", "loto7": "ロト7", "miniloto": "ミニロト"}[game]
+            cached = png_cache / f'{game}-{r["draw_no"]}-{str(r["draw_date"])[:10]}-v1.png'
+            try:
+                if not cached.exists():
+                    png_cache.mkdir(parents=True, exist_ok=True)
+                    cached.write_bytes(eyecatch_png(label=label, draw_no=r["draw_no"], draw_date=r["draw_date"]))
+            except ImportError:
+                break
+            png = P(dist) / "og" / game / f'{r["draw_no"]}.png'
+            png.parent.mkdir(parents=True, exist_ok=True)
+            png.write_bytes(cached.read_bytes())
             og = P(dist) / "og" / game / f'{r["draw_no"]}.svg'
             og.parent.mkdir(parents=True, exist_ok=True)
             og.write_text(
@@ -766,6 +782,28 @@ writePage(
   "LOTOアナリティクス～ロト6・ロト7・ミニロトの過去データ分析サイト～ 結果一覧・頻出数字傾向を徹底分析！",
   "ロト6・ロト7・ミニロトの最新当選番号・次回予想・出現回数・結果一覧の他、各要素、観点から分析できるツールを揃えています。高額当選を狙おう！",
   homeBody(),
+  // seo.ts の siteJsonLd と同じ内容
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${loc("/")}#website`,
+        name: SITE,
+        alternateName: "LOTO アナリティクス",
+        url: loc("/"),
+        inLanguage: "ja",
+        publisher: { "@id": `${loc("/")}#organization` },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${loc("/")}#organization`,
+        name: SITE,
+        url: loc("/"),
+        logo: loc("/icon-512.png"),
+      },
+    ],
+  },
 );
 urls.push("/");
 lastmods["/"] =
@@ -950,7 +988,7 @@ for (const game of GAMES) {
     const dateJa = formatDateJa(drawDate);
     const headline = flashNewsHeadline(game.label, n, drawDate);
     const histHit = gdata.history?.find((h) => h.draw_no === n);
-    const eye = `/og/${game.id}/${n}.svg?v=2`;
+    const eye = `/og/${game.id}/${n}.png?v=1`;
     // 実際に載せた時刻。記録が無い回（記事未生成）は日時を出さない
     const [pub, modified] = gdata.flash_times?.[n] || [];
     let body = `<article class="post"><p class="flash-kicker">速報</p>`;
@@ -990,7 +1028,7 @@ for (const game of GAMES) {
             publisher: {
               "@type": "Organization",
               name: SITE,
-              logo: { "@type": "ImageObject", url: loc("/favicon.svg") },
+              logo: { "@type": "ImageObject", url: loc("/icon-512.png") },
             },
             articleSection: "宝くじ",
             inLanguage: "ja",

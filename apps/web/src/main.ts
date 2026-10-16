@@ -13,6 +13,7 @@ import {
   setBreadcrumbJsonLd,
   setJsonLd,
   setSeo,
+  siteJsonLd,
   type BreadcrumbItem,
 } from "./seo";
 import { isLegalPage, legalHtml } from "./legal";
@@ -819,7 +820,7 @@ async function loadLatestAndPick(game: string): Promise<{
 
 async function renderHome(seq: number) {
   setSeo("/");
-  setJsonLd(null);
+  setJsonLd(siteJsonLd());
   const cards = [];
   for (const g of games) {
     if (seq !== renderSeq) return;
