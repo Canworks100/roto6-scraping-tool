@@ -1802,8 +1802,15 @@ table.data td.nums {
 
 .aff-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+/* 4冊を2列×2段でそろえる */
+@media (min-width: 600px) {
+  .aff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .aff-card {
